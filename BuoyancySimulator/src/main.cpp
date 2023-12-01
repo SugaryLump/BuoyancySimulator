@@ -1,19 +1,34 @@
-#include "main.h"
+#include "main.hpp"
+#include "camera.hpp"
+
+#include <iostream>
 #include <GL/freeglut.h>
+#include <vec4.hpp>
+#include <memory>
 
 using namespace std;
+using namespace glm;
+
+float ratio = 1;
+shared_ptr<Camera> cam = make_shared<Camera>();
+
+void testRender() {
+    glBegin(GL_QUADS);
+    glColor3f(1.0f, 0.0f, 1.0f);
+    glVertex3f(-0.5f, -0.5f, 1.0f);
+    glVertex3f(0.5f, -0.5f, 1.0f);
+    glVertex3f(0.5f, 0.5f, 1.0f);
+    glVertex3f(-0.5f, 0.5f, 1.0f);
+    glEnd();
+}
 
 void render() {
+    cam->UpdateMatrices(ratio);
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glBegin(GL_QUADS);
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glVertex3f(-0.5f, -0.5f, 0.0f);
-    glVertex3f(0.5f, -0.5f, 0.0f);
-    glVertex3f(0.5f, 0.5f, 0.0f);
-    glVertex3f(-0.5f, 0.5f, 0.0f);
-    glEnd();
+    testRender();
 
     glutSwapBuffers();
 }
@@ -25,7 +40,7 @@ void resizeWindow(int x, int y) {
 
     glViewport(0, 0, x, y);
 
-    float ratio = (float)x / y;
+    ratio = (float)x / y;
 }
 
 int main(int argc, char* argv[]) {
