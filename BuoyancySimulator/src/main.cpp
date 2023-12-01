@@ -1,10 +1,13 @@
 #include "main.hpp"
 #include "camera.hpp"
+#include "models.hpp"
 
 #include <iostream>
+#include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <vec4.hpp>
 #include <memory>
+#include <tiny_obj_loader.h>
 
 using namespace std;
 using namespace glm;
@@ -14,7 +17,7 @@ shared_ptr<Camera> cam = make_shared<Camera>();
 
 void testRender() {
     glBegin(GL_QUADS);
-    glColor3f(1.0f, 0.0f, 1.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(-0.5f, -0.5f, 1.0f);
     glVertex3f(0.5f, -0.5f, 1.0f);
     glVertex3f(0.5f, 0.5f, 1.0f);
@@ -57,7 +60,15 @@ int main(int argc, char* argv[]) {
     glutDisplayFunc(render);
     glutReshapeFunc(resizeWindow);
 
+    // Init glew
+    glewInit();
+
+    // Load model
+    
+
+    // Begin main loop
     cout << "Entering main render loop\n" << flush;
     glutMainLoop();
+
     return 0;
 }
