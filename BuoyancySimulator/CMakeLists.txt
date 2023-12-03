@@ -6,11 +6,13 @@ project(BuoyancySimulator)
 set(SOURCES
     src/main.cpp
     src/camera.cpp
+    src/models.cpp
 )
 
 # Add executable
 add_executable(BuoyancySimulator ${SOURCES})
 
+message(${CMAKE_BINARY_DIR}/contrib/tinyobjloader)
 # Add project include directories
 target_include_directories(BuoyancySimulator
     PRIVATE

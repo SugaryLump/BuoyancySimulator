@@ -1,10 +1,11 @@
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+
 #include "main.hpp"
 #include "camera.hpp"
 #include "models.hpp"
 
 #include <iostream>
-#include <GL/glew.h>
-#include <GL/freeglut.h>
 #include <vec4.hpp>
 #include <memory>
 #include <tiny_obj_loader.h>
@@ -13,16 +14,19 @@ using namespace std;
 using namespace glm;
 
 float ratio = 1;
-shared_ptr<Camera> cam = make_shared<Camera>();
+auto cam = make_shared<Camera>();
+auto models = vector<shared_ptr<Model>>();
 
 void testRender() {
-    glBegin(GL_QUADS);
+    /*
     glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(-0.5f, -0.5f, 1.0f);
     glVertex3f(0.5f, -0.5f, 1.0f);
     glVertex3f(0.5f, 0.5f, 1.0f);
     glVertex3f(-0.5f, 0.5f, 1.0f);
-    glEnd();
+    */
+    //glBindVertexArray(*vao);
+    //glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 }
 
 void render() {
@@ -31,7 +35,9 @@ void render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    testRender();
+    for (auto model : models) {
+        model->draw();
+    }
 
     glutSwapBuffers();
 }
@@ -64,7 +70,7 @@ int main(int argc, char* argv[]) {
     glewInit();
 
     // Load model
-    
+    models.push_back(make_shared<Model>(argv[1]));
 
     // Begin main loop
     cout << "Entering main render loop\n" << flush;
