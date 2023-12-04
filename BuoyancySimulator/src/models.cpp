@@ -1,6 +1,8 @@
-#include "models.hpp"
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+
+#include "models.hpp"
+
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 #include <string>
@@ -75,6 +77,10 @@ Model::Model(string objFilename)
         }
     }
 
+    this->minIndex = 0;
+    this->maxIndex == current_index - 1;
+    this->totalIndices = shapes[0].mesh.indices.size();
+
     // Generate IBO
     GLuint ibo, vbo;
     
@@ -120,6 +126,9 @@ Model::Model(string objFilename)
     this->translation = mat4(1.0f);
     this->rotation = mat4(1.0f);
     this->scale = mat4(1.0f);
+    this->modelMatrix = mat4(1.0f);
+
+    cout << "Finished loading model " << objFilename << endl;
 }
 
 mat4 Model::GetModelMatrix() {
@@ -128,6 +137,6 @@ mat4 Model::GetModelMatrix() {
 
 void Model::draw() {
     glBindVertexArray(*(this->vao));
-    glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+    glDrawRangeElements(GL_TRIANGLES, this->minIndex, this->maxIndex, this->totalIndices, GL_UNSIGNED_SHORT, NULL);
     glBindVertexArray(0);
 }

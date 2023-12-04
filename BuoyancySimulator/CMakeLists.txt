@@ -7,6 +7,7 @@ set(SOURCES
     src/main.cpp
     src/camera.cpp
     src/models.cpp
+    src/shader.cpp
 )
 
 # Add executable
