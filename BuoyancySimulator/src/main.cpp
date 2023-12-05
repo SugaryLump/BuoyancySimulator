@@ -25,28 +25,56 @@ shared_ptr<Shader> cameraShader;
 auto buoyantModels = vector<shared_ptr<Model>>();
 
 GLuint oceanHeightmapFramebuffer;
+GLuint oceanHeightmapTexture;
 shared_ptr<Shader> oceanHeightmapShader;
 shared_ptr<Shader> oceanShader;
+shared_ptr<Model> oceanGrid;
 shared_ptr<Model> oceanPlane;
 
+GLuint elapsedTime = 0;
+GLuint frameFrequency = 0;
+
+void updateEllapsedTime() {
+    GLuint newTime = glutGet(GLUT_ELAPSED_TIME);
+    frameFrequency = newTime - elapsedTime;
+    elapsedTime = newTime;
+}
+
 void render() {
+    // Get frame frequency
+    updateEllapsedTime();
+
     // Update camera
-    camera->UpdatePosition();
+    camera->Update(frameFrequency);
 
     // Set background colour
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Draw ocean height map
+    glDisable(GL_DEPTH_TEST);
     oceanHeightmapShader->BindShader();
     glBindFramebuffer(GL_FRAMEBUFFER, oceanHeightmapFramebuffer);
     glViewport(0, 0, FRAMEBUFFER_SIZE, FRAMEBUFFER_SIZE);
-    oceanPlane->draw();
+    oceanGrid->draw();
     
-
-    // Draw all models with the camera shader
+    // Draw ocean
+    glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, camera->windowWidth, camera->windowHeight);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    oceanShader->BindShader();
+    {
+        mat4 mvp = camera->GetViewProjectionMatrix() * oceanPlane->GetModelMatrix();
+
+        GLuint matLocation = glGetUniformLocation(cameraShader->shaderProgram, "m_mvp");
+        glUniformMatrix4fv(matLocation, 1, GL_FALSE, value_ptr(mvp));
+
+        GLuint texLocation = glGetUniformLocation(oceanShader->shaderProgram, "height_map");
+        glUniform1i(texLocation, GL_TEXTURE0);
+        oceanPlane->draw();
+    }
+
+    // Draw all models with the camera shader 
     cameraShader->BindShader();
     for (auto model : buoyantModels) {
         mat4 mvp = camera->GetViewProjectionMatrix() * model->GetModelMatrix();
@@ -94,16 +122,15 @@ GLuint initTextureRenderTarget() {
     glGenFramebuffers(1, &frameBuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
 
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    glGenTextures(1, &oceanHeightmapTexture);
+    glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, FRAMEBUFFER_SIZE, FRAMEBUFFER_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FRAMEBUFFER_SIZE, FRAMEBUFFER_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, oceanHeightmapTexture, 0);
 
     GLenum DrawBuffers[1] = {GL_COLOR_ATTACHMENT0};
     glDrawBuffers(1, DrawBuffers);
@@ -144,14 +171,19 @@ int main(int argc, char* argv[]) {
     // Face culling
     glEnable(GL_CULL_FACE);
 
+    // Depth testing
+    glEnable(GL_DEPTH_TEST);
+
     // Initialize oceanHeightmap render target
     oceanHeightmapFramebuffer = initTextureRenderTarget();
 
     // Load models
-    oceanPlane = make_shared<Model>("models/quad.obj");
+    oceanGrid = make_shared<Model>("models/ocean_grid.obj");
+    oceanPlane = make_shared<Model>("models/ocean_plane.obj");
     buoyantModels.push_back(make_shared<Model>(argv[1]));
 
     // Load shaders
+    oceanShader = make_shared<Shader>("shaders/ocean");
     oceanHeightmapShader = make_shared<Shader>("shaders/ocean_heightmap");
     cameraShader = make_shared<Shader>("shaders/camera");
 

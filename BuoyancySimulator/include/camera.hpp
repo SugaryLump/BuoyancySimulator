@@ -8,7 +8,7 @@
 
 using namespace glm;
 
-#define MOVEMENT_SPEED 0.1f
+#define MOVEMENT_SPEED 3.0f
 #define CAMERA_SENSITIVITY 0.001f
 
 class Camera {
@@ -36,13 +36,13 @@ class Camera {
 
         Camera();
 
-        void Update();
+        void Update(GLuint frameFrequency);
 
         void PressKey(unsigned char key);
         void LiftKey(unsigned char key);
-        void UpdatePosition();
         void ProcessMouseMotion(float x, float y);
 
+        void UpdatePosition(GLuint frameFrequency);
         void UpdateVectorsAndMatrices();
         mat4 GetViewMatrix();
         mat4 GetProjectionMatrix();

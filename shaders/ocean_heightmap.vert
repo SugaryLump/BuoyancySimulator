@@ -1,8 +1,13 @@
 #version 450
+#define PI 3.1415926538
 
 in vec3 vertex;
-out vec3 world_pos;
+out float height;
+
+uniform int ellapsedTime;
+
 void main() {
-    world_pos = vertex;
+    float x = (vertex.x + 1) / 2 * PI;
+    height = sin(vertex.x + ellapsedTime * (PI / 2000));
     gl_Position = vec4(vertex, 1.0);
 }

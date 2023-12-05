@@ -31,6 +31,11 @@ Camera::Camera() {
   this->UpdateVectorsAndMatrices();
 }
 
+void Camera::Update(GLuint frameFrequency) {
+  this->UpdatePosition(frameFrequency);
+  this->UpdateVectorsAndMatrices();
+}
+
 void Camera::UpdateVectorsAndMatrices() {
   this->lookVector = {
     sin(this->yaw) * cos(this->pitch),
@@ -72,7 +77,7 @@ void Camera::LiftKey(unsigned char key) {
   this->keyboardState[key] = false;
 }
 
-void Camera::UpdatePosition() {
+void Camera::UpdatePosition(GLuint frameFrequency) {
   vec3 translation = {0, 0, 0};
 
   if (this->keyboardState['w'] || this->keyboardState['W']) {
@@ -95,7 +100,7 @@ void Camera::UpdatePosition() {
   }
 
   if (translation != vec3{0, 0, 0}) {
-    this->position += normalize(translation) * MOVEMENT_SPEED;
+    this->position += normalize(translation) * MOVEMENT_SPEED * (frameFrequency/1000.0f);
     this->UpdateVectorsAndMatrices();
   }
 }
@@ -118,8 +123,6 @@ void Camera::ProcessMouseMotion(float x, float y) {
   else if (this->pitch < -M_PI_2 + 0.01) {
     this->pitch = -M_PI_2 + 0.01;
   }
-
-  this->UpdateVectorsAndMatrices();
 }
 
 mat4 Camera::GetViewMatrix() {
