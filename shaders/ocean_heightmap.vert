@@ -2,12 +2,10 @@
 #define PI 3.1415926538
 
 in vec3 vertex;
-out float height;
 
-uniform int ellapsedTime;
+out vec3 frag_vertex;
 
 void main() {
-    float x = (vertex.x + 1) / 2 * PI;
-    height = sin(vertex.x + ellapsedTime * (PI / 2000));
+    frag_vertex = vertex;
     gl_Position = vec4(vertex, 1.0);
 }

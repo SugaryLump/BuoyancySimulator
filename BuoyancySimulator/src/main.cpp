@@ -47,40 +47,57 @@ void render() {
     // Update camera
     camera->Update(frameFrequency);
 
-    // Set background colour
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    // Set background colour and clear frame
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Draw ocean height map
     glDisable(GL_DEPTH_TEST);
+
     oceanHeightmapShader->BindShader();
+
     glBindFramebuffer(GL_FRAMEBUFFER, oceanHeightmapFramebuffer);
     glViewport(0, 0, FRAMEBUFFER_SIZE, FRAMEBUFFER_SIZE);
-    oceanGrid->draw();
-    
-    // Draw ocean
-    glEnable(GL_DEPTH_TEST);
-    glViewport(0, 0, camera->windowWidth, camera->windowHeight);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    oceanShader->BindShader();
+
     {
-        mat4 mvp = camera->GetViewProjectionMatrix() * oceanPlane->GetModelMatrix();
+        GLuint elapsedTimeLocation = glGetUniformLocation(oceanHeightmapShader->shaderProgram, "elapsedTime");
+        glUniform1ui(elapsedTimeLocation, elapsedTime);
 
-        GLuint matLocation = glGetUniformLocation(cameraShader->shaderProgram, "m_mvp");
-        glUniformMatrix4fv(matLocation, 1, GL_FALSE, value_ptr(mvp));
-
-        GLuint texLocation = glGetUniformLocation(oceanShader->shaderProgram, "height_map");
-        glUniform1i(texLocation, GL_TEXTURE0);
-        oceanPlane->draw();
+        oceanGrid->draw();
     }
 
     // Draw all models with the camera shader 
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+
     cameraShader->BindShader();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, camera->windowWidth, camera->windowHeight);
+
     for (auto model : buoyantModels) {
         mat4 mvp = camera->GetViewProjectionMatrix() * model->GetModelMatrix();
         GLuint matLocation = glGetUniformLocation(cameraShader->shaderProgram, "m_mvp");
         glUniformMatrix4fv(matLocation, 1, GL_FALSE, value_ptr(mvp));
         model->draw();
+    }
+
+    // Draw ocean
+    glDisable(GL_CULL_FACE);
+
+    oceanShader->BindShader();
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
+    {
+        mat4 mvp = camera->GetViewProjectionMatrix() * oceanPlane->GetModelMatrix();
+
+        GLuint matLocation = glGetUniformLocation(oceanShader->shaderProgram, "m_mvp");
+        glUniformMatrix4fv(matLocation, 1, GL_FALSE, value_ptr(mvp));
+
+        GLuint texLocation = glGetUniformLocation(oceanShader->shaderProgram, "height_map");
+        glUniform1i(texLocation, GL_TEXTURE0);
+        oceanPlane->draw();
     }
 
     // Force redraw
@@ -117,11 +134,12 @@ void moveMouse(int x, int y) {
     }
 }
 
-GLuint initTextureRenderTarget() {
-    GLuint frameBuffer = 0;
-    glGenFramebuffers(1, &frameBuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+void initOceanHeightmapRenderTarget() {
+    oceanHeightmapFramebuffer = 0;
+    glGenFramebuffers(1, &oceanHeightmapFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, oceanHeightmapFramebuffer);
 
+    glActiveTexture(GL_TEXTURE0);
     glGenTextures(1, &oceanHeightmapTexture);
     glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
 
@@ -139,8 +157,6 @@ GLuint initTextureRenderTarget() {
         cout << "Error initializing frame buffer." << endl << flush;
         exit(-1);
     }
-    
-    return frameBuffer;
 }
 
 int main(int argc, char* argv[]) {
@@ -168,14 +184,12 @@ int main(int argc, char* argv[]) {
     // Init glew
     glewInit();
 
-    // Face culling
-    glEnable(GL_CULL_FACE);
-
-    // Depth testing
-    glEnable(GL_DEPTH_TEST);
+    // Alpha blending
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable( GL_BLEND );
 
     // Initialize oceanHeightmap render target
-    oceanHeightmapFramebuffer = initTextureRenderTarget();
+    initOceanHeightmapRenderTarget();
 
     // Load models
     oceanGrid = make_shared<Model>("models/ocean_grid.obj");

@@ -43,12 +43,12 @@ Model::Model(string objFilename)
 
     // This map maps the wavefront obj file's vertex indexes to a single index,
     // for IBO compatibility.
-    auto index_conversion_map = unordered_map<vec3, GLushort>();
+    auto index_conversion_map = unordered_map<vec3, GLuint>();
     // This vector holds our ordered vertex data (VNT)
     vector<float> vertices;
     // This array holds the mesh's shape forming indices
-    GLushort indices[shapes[0].mesh.indices.size()];
-    GLushort current_index = 0;
+    GLuint indices[shapes[0].mesh.indices.size()];
+    GLuint current_index = 0;
 
     for (int i = 0; i < shapes[0].mesh.indices.size(); i++)
     {
@@ -86,13 +86,16 @@ Model::Model(string objFilename)
     
     glGenBuffers(1, &ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, shapes[0].mesh.indices.size() * sizeof(GLushort), indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, shapes[0].mesh.indices.size() * sizeof(GLuint), indices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // Generate VBO
-    short n = vertices.size();
+    int n = vertices.size();
     float vertices_aux[n];
-    copy(vertices.begin(), vertices.end(), vertices_aux);
+    for (int i = 0; i < vertices.size(); i++) {
+        cout << i << "/" << vertices.size() << endl;
+        vertices_aux[i] = vertices[i];
+    }
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), vertices_aux, GL_STATIC_DRAW);
@@ -137,6 +140,6 @@ mat4 Model::GetModelMatrix() {
 
 void Model::draw() {
     glBindVertexArray(*(this->vao));
-    glDrawRangeElements(GL_TRIANGLES, this->minIndex, this->maxIndex, this->totalIndices, GL_UNSIGNED_SHORT, NULL);
+    glDrawRangeElements(GL_TRIANGLES, this->minIndex, this->maxIndex, this->totalIndices, GL_UNSIGNED_INT, NULL);
     glBindVertexArray(0);
 }

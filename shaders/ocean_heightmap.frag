@@ -1,9 +1,14 @@
 #version 450
+#define PI 3.1415926538
 
-in float height;
+in vec3 frag_vertex;
+
+uniform uint elapsedTime;
 
 layout(location = 0) out vec4 color;
 
 void main() {
-    color = vec4(height, 1.0, 1.0, 1.0);
+    float x = (frag_vertex.x + 1) * 4 * PI;
+    float height = sin(x + elapsedTime * (PI / 3000));
+    color = vec4(height, 0, 0, 1.0);
 }
