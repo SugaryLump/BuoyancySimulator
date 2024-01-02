@@ -19,17 +19,22 @@
 using namespace std;
 using namespace glm;
 
+#define WAVE_HEIGHT 0.3f;
+
 shared_ptr<Camera> camera;
-shared_ptr<Shader> cameraShader;
+shared_ptr<Shader> buoyantShader;
 
 auto buoyantModels = vector<shared_ptr<Model>>();
 
 GLuint oceanHeightmapFramebuffer;
 GLuint oceanHeightmapTexture;
 shared_ptr<Shader> oceanHeightmapShader;
-shared_ptr<Shader> oceanShader;
 shared_ptr<Model> oceanGrid;
+
+shared_ptr<Shader> oceanShader;
 shared_ptr<Model> oceanPlane;
+
+GLuint verticesSSBO, positionsSSBO, angularPositionsSSBO;
 
 GLuint elapsedTime = 0;
 GLuint frameFrequency = 0;
@@ -51,7 +56,10 @@ void render() {
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Draw ocean height map
+    // Enable fill mode
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    // Calculate ocean height map
     glDisable(GL_DEPTH_TEST);
 
     oceanHeightmapShader->BindShader();
@@ -66,37 +74,73 @@ void render() {
         oceanGrid->draw();
     }
 
-    // Draw all models with the camera shader 
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-
-    cameraShader->BindShader();
-
+    // Set framebuffer back to default for drawing on scren
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, camera->windowWidth, camera->windowHeight);
 
-    for (auto model : buoyantModels) {
-        mat4 mvp = camera->GetViewProjectionMatrix() * model->GetModelMatrix();
-        GLuint matLocation = glGetUniformLocation(cameraShader->shaderProgram, "m_mvp");
-        glUniformMatrix4fv(matLocation, 1, GL_FALSE, value_ptr(mvp));
-        model->draw();
-    }
+    // Enable wireframe mode (debugging purposes, remove later)
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    // Draw ocean
-    glDisable(GL_CULL_FACE);
+    // Draw all buoyant models with the buoyant shader 
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 
-    oceanShader->BindShader();
+    buoyantShader->BindShader();
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
     {
-        mat4 mvp = camera->GetViewProjectionMatrix() * oceanPlane->GetModelMatrix();
+        mat4 m_vp = camera->GetViewProjectionMatrix();
+        GLuint m_vpLocation = glGetUniformLocation(buoyantShader->shaderProgram, "m_vp");
+        glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
 
-        GLuint matLocation = glGetUniformLocation(oceanShader->shaderProgram, "m_mvp");
-        glUniformMatrix4fv(matLocation, 1, GL_FALSE, value_ptr(mvp));
+        GLfloat waveHeight = WAVE_HEIGHT;
+        GLuint waveHeightLocation = glGetUniformLocation(buoyantShader->shaderProgram, "waveHeight");
+        glUniform1f(waveHeightLocation, waveHeight);
+        for (int i = 0; i < buoyantModels.size(); i++) {
+            mat4 m_model = buoyantModels[i]->GetModelMatrix();
+            GLuint m_modelLocation = glGetUniformLocation(buoyantShader->shaderProgram, "m_model");
+            glUniformMatrix4fv(m_modelLocation, 1, GL_FALSE, value_ptr(m_model));
+
+            mat4 m_mvp = m_vp * m_model;
+            GLuint m_mvpLocation = glGetUniformLocation(buoyantShader->shaderProgram, "m_mvp");
+            glUniformMatrix4fv(m_mvpLocation, 1, GL_FALSE, value_ptr(m_mvp));
+
+            GLuint boatIndex = i;
+            GLuint boatIndexLocation = glGetUniformLocation(buoyantShader->shaderProgram, "boatIndex");
+            glUniform1ui(boatIndexLocation, (boatIndex));
+
+            GLuint texLocation = glGetUniformLocation(buoyantShader->shaderProgram, "oceanHeightmap");
+            glUniform1i(texLocation, GL_TEXTURE0);
+
+            buoyantModels[i]->draw();
+        }
+    }
+
+    // Draw ocean
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+
+    oceanShader->BindShader();
+    
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
+    {
+        mat4 m_vp = camera->GetViewProjectionMatrix();
+        GLuint m_vpLocation = glGetUniformLocation(oceanShader->shaderProgram, "m_vp");
+        glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
+
+        mat4 m_model = oceanPlane->GetModelMatrix();
+        GLuint m_modelLocation = glGetUniformLocation(oceanShader->shaderProgram, "m_model");
+        glUniformMatrix4fv(m_modelLocation, 1, GL_FALSE, value_ptr(m_model));
 
         GLuint texLocation = glGetUniformLocation(oceanShader->shaderProgram, "height_map");
         glUniform1i(texLocation, GL_TEXTURE0);
+
+        GLfloat waveHeight = WAVE_HEIGHT;
+        GLuint waveHeightLocation = glGetUniformLocation(oceanShader->shaderProgram, "waveHeight");
+        glUniform1f(waveHeightLocation, waveHeight);
+
         oceanPlane->draw();
     }
 
@@ -159,6 +203,40 @@ void initOceanHeightmapRenderTarget() {
     }
 }
 
+void initSSBOs() {
+    float positions_aux[buoyantModels.size() * 4];
+    float angularPositions_aux[buoyantModels.size() * 4];
+
+    for (int i = 0; i < buoyantModels.size(); i++) {
+        positions_aux[i * 4] = 0.0f;
+        positions_aux[i * 4 + 1] = 0.0f;
+        positions_aux[i * 4 + 2] = 0.0f;
+        positions_aux[i * 4 + 3] = 0.0f;
+
+        angularPositions_aux[i * 4] = 0.0f;
+        angularPositions_aux[i * 4 + 1] = 0.0f;
+        angularPositions_aux[i * 4 + 2] = 0.0f;
+        angularPositions_aux[i * 4 + 3] = 0.0f;
+    }
+
+    //glGenBuffers(1, &verticesSSBO);
+    //glBindBuffer(GL_SHADER_STORAGE_BUFFER, verticesSSBO);
+    //glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), NULL, GL_DYNAMIC_DRAW);
+    //glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, verticesSSBO);
+    
+    glGenBuffers(1, &positionsSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, positionsSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), positions_aux, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, positionsSSBO);
+
+    glGenBuffers(1, &angularPositionsSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, positionsSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), angularPositions_aux, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, angularPositionsSSBO);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+
 int main(int argc, char* argv[]) {
     // GLUT initialization and context creation
     cout << "Initializing GLUT\n" << flush;
@@ -194,12 +272,16 @@ int main(int argc, char* argv[]) {
     // Load models
     oceanGrid = make_shared<Model>("models/ocean_grid.obj");
     oceanPlane = make_shared<Model>("models/ocean_plane.obj");
+    oceanPlane->SetScale(vec3(64, 0, 64));
     buoyantModels.push_back(make_shared<Model>(argv[1]));
 
     // Load shaders
     oceanShader = make_shared<Shader>("shaders/ocean");
     oceanHeightmapShader = make_shared<Shader>("shaders/ocean_heightmap");
-    cameraShader = make_shared<Shader>("shaders/camera");
+    buoyantShader = make_shared<Shader>("shaders/buoyant");
+
+    // Initialize SSBOs
+    initSSBOs();
 
     // Begin main loop
     cout << "Entering main render loop\n" << flush;

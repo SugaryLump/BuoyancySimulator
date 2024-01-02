@@ -93,7 +93,7 @@ Model::Model(string objFilename)
     int n = vertices.size();
     float vertices_aux[n];
     for (int i = 0; i < vertices.size(); i++) {
-        cout << i << "/" << vertices.size() << endl;
+        // cout << i << "/" << vertices.size() << endl;
         vertices_aux[i] = vertices[i];
     }
     glGenBuffers(1, &vbo);
@@ -136,6 +136,18 @@ Model::Model(string objFilename)
 
 mat4 Model::GetModelMatrix() {
     return this->modelMatrix;
+}
+
+void Model::SetScale(vec3 scale) {
+    this->scale = mat4(scale.x,   0.0,       0.0,      0.0,
+                       0.0,       scale.y,   0.0,      0.0,
+                       0.0,       0.0,       scale.z,  0.0,
+                       0.0,       0.0,       0.0,      1.0);
+    UpdateModelMatrix();
+}
+
+void Model::UpdateModelMatrix() {
+    this->modelMatrix = this->translation * this->rotation * this->scale;
 }
 
 void Model::draw() {

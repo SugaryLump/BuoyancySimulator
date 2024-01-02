@@ -27,5 +27,7 @@ class Model {
     public:
         Model(string objFilename);
         mat4 GetModelMatrix();
+        void SetScale(vec3 scale);
+        void UpdateModelMatrix();
         void draw();
 };
