@@ -7,8 +7,36 @@ layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
 };
 
+layout (std430, binding = 2) buffer forcesSSBO {
+    vec4 forces[];
+};
+
+layout (std430, binding = 4) buffer boatVelocitiesSSBO {
+    vec4 boatVelocities[];
+};
+
+layout (std430, binding = 5) buffer boatAngularVelocitiesSSBO{
+    vec4 boatAngularVelocities[];
+};
+
 layout(std430, binding = 6) buffer boatAngularPositionsSSBO {
     vec4 boatAngularPositions[];
+};
+
+layout (std430, binding = 8) buffer torquesSSBO {
+    vec4 torques[];
+};
+
+layout (std430, binding = 10) buffer boatMassesSSBO{
+	float boatMasses[];
+};
+
+layout (std430, binding = 11) buffer boatTotalAreasSSBO{
+	float boatTotalAreas[];
+};
+
+layout (std430, binding = 12) buffer boatLengthsSSBO{
+	float boatLengths[];
 };
 
 uniform int boatIndex;
@@ -19,6 +47,10 @@ uniform mat4 m_model;
 uniform sampler2D oceanHeightmap;
 
 out vec4 colorIn;
+
+#define G 9.8
+#define DENSITY 1.0
+#define VISCOSITY_VARIATION 0.000001
 
 // Returns a texture coordinate by normalizing a 2D vector
 // within x and z [-32, 32]
@@ -31,16 +63,16 @@ float waveHeightAtPoint(float x, float z) {
 }
 
 // Returns a vector that is normal to 3 points
-//vec3 normal(vec3 A, vec3 B, vec3 C) {
-//    vec3 U = B - A;
-//    vec3 V = C - A;
-//    vec3 N = cross(U, V);
-//
-//    if (N != vec3(0.0)) {
-//        N = normalize(N);
-//    }
-//    return N;
-//}
+vec3 normal(vec3 A, vec3 B, vec3 C) {
+    vec3 U = B - A;
+    vec3 V = C - A;
+    vec3 N = cross(U, V);
+
+    if (N != vec3(0.0)) {
+        N = normalize(N);
+    }
+    return N;
+}
 
 // Returns a plane defined by 3 points
 //vec4 plane(vec3 A, vec3 B, vec3 C) {
@@ -75,7 +107,7 @@ float waveHeightAtPoint(float x, float z) {
 //}
 
 // Calculate a point's signed distance to the ocean surface (negative = below surface)
-// !!!Really, I have no idea why this original commented method is half as complex as it is here.
+// !!!Really, I have no idea why this original commented method is half as complex as it is.
 // Newer version seems to work just fine and is infinitely simpler.!!!
 //float surfaceDistance(vec3 vertex) {
 //    vec4 pl = oceanPlane(vertex.x, vertex.z);
@@ -84,6 +116,7 @@ float waveHeightAtPoint(float x, float z) {
 //    return vertex.y - oceanAltitude;
 //}
 
+// Calculate a point's signed distance to the ocean surface (negative = below surface)
 float surfaceDistance(vec3 vertex) {
     return vertex.y - waveHeightAtPoint(vertex.x, vertex.z);
 }
@@ -142,6 +175,121 @@ bool compHand(vec3 A, vec3 B, vec3 C, vec3 H, vec3 M, vec3 L) {
     return (V1.x > 0) == (V2.x > 0) && (V1.y > 0) == (V2.y > 0) && (V1.z > 0) == (V2.z > 0);
 }
 
+// Calculates the centroid coordinates of a triangle composed of these vertices
+vec3 triangleCentroid(vec3 A, vec3 B, vec3 C) {
+    return (A + B + C) / 3.0;
+}
+
+// Calculates the area of a triangle composed of these vertices
+float triangleArea(vec3 A, vec3 B, vec3 C) {
+    return length(cross(B - A, C - A)) / 2;
+}
+
+// Calculates the buoyancy force exerted on a triangle composed of these vertices
+vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
+    float hCenter = surfaceDistance(tCentroid);
+    float force_y = (G * hCenter * DENSITY * tArea * tNormal).y;
+
+    return vec3(0.0, force_y, 0.0);
+}
+
+// Calculates this boat's resistance coefficient
+float resistanceCoefficient() {
+    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLengths[boatIndex] / VISCOSITY_VARIATION;
+
+    return 0.075 / pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+}
+
+// Calculates a triangle's velocity
+vec3 triangleVelocity(vec3 tCentroid) {
+    vec3 vB = boatVelocities[boatIndex].xyz;
+    vec3 oB = boatAngularVelocities[boatIndex].xyz;
+    vec3 rBA = tCentroid - boatPositions[boatIndex].xyz;
+    
+    return vB + cross(oB, rBA);
+}
+
+// Calculates this triangle's viscous water resistance
+// !!!The original function for this is frankly baffling. Uncountable
+// expensive recalculations, completely superfluous operations that mean
+// and achieve absolutely nothing. Literally calculating  the magnitude of
+// a normal vector (which we KNOW is always 1 or 0) and then setting it to 1 anyway
+// in case the normal is 0...
+// Also the original function doesn't seem to respect its own formula,
+// where it's specified that vF needs to be squared and not multiplied by it's
+// length. The paper for this has it like the implementation, so I'm not sure what
+// changed here.
+// This is pretty modified, but if stuff is wonky, RECHECK HERE 1ST!!!
+vec3 viscousWaterResistance(vec3 tNormal, float tArea, vec3 tVel, float tVelMagnitude, float resC) {
+    vec3 vTangent = cross(tNormal, cross(tVel, tNormal));
+    float vTangentMagnitude = length(vTangent);
+    float mVel = vTangentMagnitude == 0.0 ? 1.0 : 1.0 / vTangentMagnitude;
+    vec3 tangentialDir = mVel * vTangent;
+    vec3 vF = tVelMagnitude * tangentialDir;
+    float vFMagnitude = length(vF);
+    
+    return 0.5 * DENSITY * resC * tArea * vFMagnitude * vF;
+}
+
+// Calculates this triangle's cos-theta (unsure what this is)
+float triangleCosTheta(vec3 tVel, vec3 tNormal) {
+    vec3 normalizedTriangleVelocity = tVel == vec3(0.0) ? tVel : normalize(tVel);
+    return dot(normalizedTriangleVelocity, tNormal);
+}
+
+// Calculates this triangle's pressure drag force
+// !!!Again... what was going on here?? More expensive recalculations, more
+// superfluous code that achieves nothing (in this case, literally,
+// *programatically* nothing, even),
+// checking if a power of two is negative...
+// Another suspect to check if stuff is wonky!!!
+vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCosTheta) {
+    float C_D1, C_D2, f_P;
+
+    // This is like this for rudimentar parametrization
+    if (tCosTheta > 0) {
+        C_D1 = 1;
+        C_D2 = 1;
+        f_P = 0.5;
+    }
+    else {
+        C_D1 = 1;
+        C_D2 = 1;
+        f_P = 0.5;
+    }
+
+    return -(C_D1 * tVelMagnitude +  C_D2 * (tVelMagnitude * tVelMagnitude)) * tArea * pow(tCosTheta, f_P) * tNormal;
+}
+
+// Calculates the slamming force on this triangle
+vec3 slammingForce(float tArea, float tCosTheta) {
+    float boatArea = boatTotalAreas[boatIndex];
+
+    if (boatArea == 0) {
+        return vec3(0.0);
+    }
+
+    return ((2 * boatMasses[boatIndex] * (tCosTheta < 0 ? 0 : tArea * tCosTheta)) / boatArea) * boatVelocities[boatIndex].xyz;
+}
+
+void setTriangleForceAndTorque(vec3[3] forcesArray, vec3[3] torquesArray, vec3[9] vertices, int index, float resC) {
+    vec3 tNormal = normal(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
+    vec3 tCentroid = triangleCentroid(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
+    vec3 tVelocity = triangleVelocity(tCentroid);
+    float tVelocityMagnitude = length(tVelocity);
+    float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
+    float tCosTheta = triangleCosTheta(tVelocity, tNormal);
+
+    forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea) +
+                         viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC) +
+                         pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
+                         slammingForce(tArea, tCosTheta);
+
+    // Using boat position as a center os mass is EXTREMELY sus
+    // Give this a closer look eventually...
+    torquesArray[index] = cross(tCentroid - boatPositions[boatIndex].xyz, forcesArray[0]);
+}
+
 void main() {
     vec3 A = (m_model * gl_in[0].gl_Position).xyz;
     vec3 B = (m_model * gl_in[1].gl_Position).xyz;
@@ -159,22 +307,30 @@ void main() {
     bool CIsSubmerged = CSurfaceDist < 0;
 
 
-    int totalSubmergedVertices = (AIsSubmerged ? 1 : 0) + (BIsSubmerged ? 1 : 0) + (CIsSubmerged ? 1 : 0);
-    int workingTriangles = 1;
     vec3[9] vertices;
 
+
+    // Auxiliary variables to cut down dozens of lines of code
     vec3[3] baseVerticesAux = {A, B, C};
     float[3] baseDistsAux = {ASurfaceDist, BSurfaceDist, CSurfaceDist};
-
+    // Triangle generation based on how many vertices were submerged
+    int totalSubmergedVertices = (AIsSubmerged ? 1 : 0) + (BIsSubmerged ? 1 : 0) + (CIsSubmerged ? 1 : 0);
+    int workingTriangles, submergedTriangles;
     switch (totalSubmergedVertices) {
         case 0: {
+            // No submerged triangles
+            workingTriangles = 1;
+            submergedTriangles = 0;
+
             vertices[0] = A;
             vertices[1] = B;
             vertices[2] = C;
         }
             break;
         case 1: {
+            // Last triangle is submerged
             workingTriangles = 3;
+            submergedTriangles = 1;
 
             int LIndexAux = AIsSubmerged ? 0 : (BIsSubmerged ? 1 : 2);
             int MIndexAux = AIsSubmerged ? (B.y < C.y ? 1 : 2) : (BIsSubmerged ? (A.y < C.y ? 0 : 2) : (A.y < B.y ? 0 : 1));
@@ -222,7 +378,10 @@ void main() {
         }
             break;
         case 2: {
+            // Last 2 triangles are submerged (3 triangles)
             workingTriangles = 3;
+            submergedTriangles = 2;
+            // Vertex naming change from original implementation:
             // H -> L
             // L -> M
             // M -> H
@@ -272,6 +431,10 @@ void main() {
         }
             break;
         case 3: {
+            // Triangle is submerged (1 triangle)
+            workingTriangles = 1;
+            submergedTriangles = 1;
+
             vertices[0] = A;
             vertices[1] = B;
             vertices[2] = C;
@@ -279,10 +442,34 @@ void main() {
             break;
         default: break;
     }
- 
+
+    vec3[3] forcesAux;
+    vec3[3] torquesAux;
+    forcesAux[0] = forcesAux[1] = forcesAux[2] = vec3(0.0);
+    torquesAux[0] = torquesAux[1] = torquesAux[2] = vec3(0.0);
+    float resC = resistanceCoefficient();
+
+    // case 3, where all points of the original triangle are submerged
+    if (workingTriangles == 1 && submergedTriangles == 1) {
+        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 0, resC);
+    }
+    // case 1 and 2, where the third generated triangle is always submerged
+    else if (submergedTriangles > 1) {
+        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 2, resC);
+
+        // case 2, where the second generated triangle is always submerged
+        if (submergedTriangles == 3) {
+            setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 1, resC);
+        }
+    }
+
+    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
+    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
+    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
+
+    torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
+    torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
+    torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
+
     transformAndEmitVertices(vertices, workingTriangles);
-    //vertices[0] = A;
-    //vertices[1] = B;
-    //vertices[2] = C;
-    //transformAndEmitVertices(vertices, 1);
 }

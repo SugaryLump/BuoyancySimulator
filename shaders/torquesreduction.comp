@@ -1,0 +1,39 @@
+#version 450
+
+layout (local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
+
+layout (std430, binding = 8) buffer torquesSSBO {
+    vec4 torques[];
+};
+
+uniform uint totalTorques;
+
+shared vec4[16] torquesAux;
+
+
+// Parallel sum reduction based on NVIDIA's CUDA Webinar 2 (4th iteration, sequential addressing)
+// https://developer.download.nvidia.com/compute/cuda/1.1-Beta/x86_website/projects/reduction/doc/reduction.pdf
+void main() {
+    // get thread ids
+    uint lid = gl_LocalInvocationID.x;
+    uint gid = gl_GlobalInvocationID.x * gl_WorkGroupSize.x * 2 + lid;
+
+    // each thread gets 2 elements and adds them together (first addition of
+    // the reduction, hard coded outside the loop)
+    torquesAux[lid] = gid < totalTorques ? torques[gid] : vec4(0);
+    if (gid + gl_WorkGroupSize.x < totalTorques) {
+        torquesAux[lid] += torques[gid + gl_WorkGroupSize.x];
+    }
+    memoryBarrierShared();
+
+    for (uint stride = gl_WorkGroupSize.x / 2; stride > 0; stride >>= 1) {
+        if (lid < stride) {
+            torquesAux[lid] += torquesAux[lid + stride];
+        }
+        memoryBarrierShared();
+    }
+
+    if (lid == 0) {
+        torques[gl_GlobalInvocationID.x] = torquesAux[0];
+    }
+}
