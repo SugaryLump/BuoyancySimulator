@@ -23,8 +23,8 @@ Camera::Camera() {
   this->near = 0.001;
   this->far = 1000;
   this->fov = M_PI_4;
-  this->position = {0, 0, 0};
-  this->pitch = 0;
+  this->position = {0, 2.0, 8};
+  this->pitch = -0.4;
   this->yaw = 0;
   memset(this->keyboardState, 0, sizeof(bool) * 256);
 

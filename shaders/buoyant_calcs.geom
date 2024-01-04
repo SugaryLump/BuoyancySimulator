@@ -27,24 +27,16 @@ layout (std430, binding = 8) buffer torquesSSBO {
     vec4 torques[];
 };
 
-layout (std430, binding = 10) buffer boatMassesSSBO{
-	float boatMasses[];
-};
-
-layout (std430, binding = 11) buffer boatTotalAreasSSBO{
-	float boatTotalAreas[];
-};
-
-layout (std430, binding = 12) buffer boatLengthsSSBO{
-	float boatLengths[];
-};
-
 uniform int boatIndex;
-uniform mat4 m_mvp;
+uniform float boatMass;
+uniform float boatTotalArea;
+uniform float boatLength;
+
 uniform float waveHeight;
+uniform sampler2D oceanHeightmap;
+
 uniform mat4 m_vp;
 uniform mat4 m_model;
-uniform sampler2D oceanHeightmap;
 
 out vec4 colorIn;
 
@@ -195,7 +187,7 @@ vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
 
 // Calculates this boat's resistance coefficient
 float resistanceCoefficient() {
-    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLengths[boatIndex] / VISCOSITY_VARIATION;
+    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / VISCOSITY_VARIATION;
 
     return 0.075 / pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
 }
@@ -263,16 +255,16 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
 
 // Calculates the slamming force on this triangle
 vec3 slammingForce(float tArea, float tCosTheta) {
-    float boatArea = boatTotalAreas[boatIndex];
+    float boatArea = boatTotalArea;
 
     if (boatArea == 0) {
         return vec3(0.0);
     }
 
-    return ((2 * boatMasses[boatIndex] * (tCosTheta < 0 ? 0 : tArea * tCosTheta)) / boatArea) * boatVelocities[boatIndex].xyz;
+    return ((2 * boatMass * (tCosTheta < 0 ? 0 : tArea * tCosTheta)) / boatArea) * boatVelocities[boatIndex].xyz;
 }
 
-void setTriangleForceAndTorque(vec3[3] forcesArray, vec3[3] torquesArray, vec3[9] vertices, int index, float resC) {
+void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, int index, float resC) {
     vec3 tNormal = normal(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     vec3 tCentroid = triangleCentroid(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     vec3 tVelocity = triangleVelocity(tCentroid);
@@ -280,12 +272,12 @@ void setTriangleForceAndTorque(vec3[3] forcesArray, vec3[3] torquesArray, vec3[9
     float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
-    forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea) +
-                         viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC) +
+    forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
+                         viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
                          pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
                          slammingForce(tArea, tCosTheta);
 
-    // Using boat position as a center os mass is EXTREMELY sus
+    // Using boat position as a center of mass is EXTREMELY sus
     // Give this a closer look eventually...
     torquesArray[index] = cross(tCentroid - boatPositions[boatIndex].xyz, forcesArray[0]);
 }
@@ -464,12 +456,12 @@ void main() {
     }
 
     forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
-    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
-    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
+    forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);
+    forces[gl_PrimitiveIDIn * 3 + 2] = vec4(forcesAux[2], 0.0);
 
     torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
-    torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
-    torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
+    torques[gl_PrimitiveIDIn * 3 + 1] = vec4(torquesAux[1], 0.0);
+    torques[gl_PrimitiveIDIn * 3 + 2] = vec4(torquesAux[2], 0.0);
 
-    transformAndEmitVertices(vertices, workingTriangles);
+    // transformAndEmitVertices(vertices, workingTriangles);
 }

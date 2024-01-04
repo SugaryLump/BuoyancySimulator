@@ -16,7 +16,7 @@ shared vec4[16] torquesAux;
 void main() {
     // get thread ids
     uint lid = gl_LocalInvocationID.x;
-    uint gid = gl_GlobalInvocationID.x * gl_WorkGroupSize.x * 2 + lid;
+    uint gid = gl_WorkGroupID.x * gl_WorkGroupSize.x * 2 + lid;
 
     // each thread gets 2 elements and adds them together (first addition of
     // the reduction, hard coded outside the loop)
@@ -34,6 +34,6 @@ void main() {
     }
 
     if (lid == 0) {
-        torques[gl_GlobalInvocationID.x] = torquesAux[0];
+        torques[gl_WorkGroupID.x] = torquesAux[0];
     }
 }

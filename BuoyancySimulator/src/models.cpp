@@ -14,6 +14,7 @@
 #include <gtx/hash.hpp>
 #include <vector>
 #include <memory>
+#include <cmath>
 
 using namespace std;
 using namespace glm;
@@ -132,6 +133,30 @@ Model::Model(string objFilename)
     this->modelMatrix = mat4(1.0f);
 
     cout << "Finished loading model " << objFilename << endl;
+
+    // Calculate dimensions
+    this->totalArea = 0;
+    float xmin, xmax, zmin, zmax;
+    xmin = xmax = vertices[0];
+    zmin = zmax = vertices[2];
+
+    for (int i = 0; i < shapes[0].mesh.indices.size(); i += 3) {
+        vec3 A = vec3(vertices[indices[i] * 8], vertices[indices[i] * 8 + 1], vertices[indices[i] * 8 + 2]);
+        vec3 B = vec3(vertices[indices[i + 1] * 8], vertices[indices[i + 1] * 8 + 1], vertices[indices[i + 1] * 8 + 2]);
+        vec3 C = vec3(vertices[indices[i + 2] * 8], vertices[indices[i + 2] * 8 + 1], vertices[indices[i + 2] * 8 + 2]);
+        this->totalArea += glm::length(cross(B - A, C - A)) / 2;
+
+        xmin = std::min(xmin, std::min(A.x, std::min(B.x, C.x)));
+        xmax = std::max(xmax, std::max(A.x, std::max(B.x, C.x)));
+        zmin = std::min(zmin, std::min(A.z, std::min(B.z, C.z)));
+        zmax = std::max(zmax, std::max(A.z, std::max(B.z, C.z)));
+    }
+
+    this->length = std::max(xmax - xmin, zmax - zmin);
+    // Using a default volume value here. Eventually needs actual implementing.
+    this->volume = DEFAULT_VOLUME;
+
+    cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << ")" << endl;
 }
 
 mat4 Model::GetModelMatrix() {
@@ -148,6 +173,22 @@ void Model::SetScale(vec3 scale) {
 
 void Model::UpdateModelMatrix() {
     this->modelMatrix = this->translation * this->rotation * this->scale;
+}
+
+int Model::GetTriangleCount() {
+    return this->totalIndices / 3;
+}
+
+float Model::GetTotalArea() {
+    return this->totalArea;
+}
+
+float Model::GetVolume() {
+    return this->volume;
+}
+
+float Model::GetLength() {
+    return this->length;
 }
 
 void Model::draw() {

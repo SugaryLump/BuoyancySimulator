@@ -8,10 +8,10 @@
 
 #pragma once
 
+#define DEFAULT_VOLUME 16.918842
+
 using namespace std;
 using namespace glm;
-
-void generateVAOFromOBJ(GLuint* vao, string objFilename);
 
 class Model {
     private:
@@ -24,10 +24,19 @@ class Model {
         int maxIndex;
         int totalIndices;
 
+        float totalArea;
+        float volume;
+        float length;
+
     public:
+        Model() = default;
         Model(string objFilename);
         mat4 GetModelMatrix();
         void SetScale(vec3 scale);
         void UpdateModelMatrix();
+        int GetTriangleCount();
+        float GetTotalArea();
+        float GetVolume();
+        float GetLength();
         void draw();
 };

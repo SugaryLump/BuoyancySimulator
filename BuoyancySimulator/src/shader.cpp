@@ -15,12 +15,14 @@ using namespace std;
 vector<string> shaderTypes = {
     "vert",
     "geom",
-    "frag"
+    "frag",
+    "comp"
 };
 vector<int> glShaderTypes = {
     GL_VERTEX_SHADER,
     GL_GEOMETRY_SHADER,
-    GL_FRAGMENT_SHADER
+    GL_FRAGMENT_SHADER,
+    GL_COMPUTE_SHADER,
 };
 
 string readFile(string fileName)
@@ -40,7 +42,6 @@ string readFile(string fileName)
 Shader::Shader(string shaderName)
 {
     this->shaderProgram = 0;
-    GLuint shaders[shaderTypes.size()];
     vector<GLuint> compiledShaders;
 
     for (int i = 0; i < shaderTypes.size(); i++)
@@ -50,15 +51,15 @@ Shader::Shader(string shaderName)
 
         if (!shaderString.empty())
         {
-            shaders[i] = glCreateShader(glShaderTypes[i]);
+            GLuint shader = glCreateShader(glShaderTypes[i]);
             int len = shaderString.length();
             const char *shaderCStr = shaderString.c_str();
-            glShaderSource(shaders[i], 1, (const GLchar **)&shaderCStr, &len);
+            glShaderSource(shader, 1, (const GLchar **)&shaderCStr, &len);
 
-            glCompileShader(shaders[i]);
+            glCompileShader(shader);
 
             GLint compiled;
-            glGetShaderiv(shaders[i], GL_COMPILE_STATUS, &compiled);
+            glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
             if (compiled == GL_FALSE)
             {
                 cout << "Error compiling " << shaderType << " shader." << endl;
@@ -66,12 +67,12 @@ Shader::Shader(string shaderName)
                 int charsWritten = 0;
                 GLchar *infoLog;
 
-                glGetShaderiv(shaders[i], GL_INFO_LOG_LENGTH, &infoLogLen);
+                glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLen);
 
                 if (infoLogLen > 0)
                 {
                     infoLog = new GLchar[infoLogLen];
-                    glGetShaderInfoLog(shaders[i], infoLogLen, &charsWritten, infoLog);
+                    glGetShaderInfoLog(shader, infoLogLen, &charsWritten, infoLog);
                     cout << "InfoLog : " << endl
                          << infoLog << endl;
                     delete[] infoLog;
@@ -81,7 +82,7 @@ Shader::Shader(string shaderName)
             }
             else
             {
-                compiledShaders.push_back(shaders[i]);
+                compiledShaders.push_back(shader);
                 cout << "Compiled a " << shaderType << " shader" << endl;
             }
         }
@@ -117,9 +118,8 @@ Shader::Shader(string shaderName)
 
         for (GLuint shaderID : compiledShaders)
         {
-            glDetachShader(this->shaderProgram, shaders[shaderID]);
-            glDeleteShader(shaders[shaderID]);
-            shaders[shaderID] = 0;
+            glDetachShader(this->shaderProgram, shaderID);
+            glDeleteShader(shaderID);
         }
 
         glDeleteProgram(this->shaderProgram);

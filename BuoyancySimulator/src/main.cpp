@@ -5,11 +5,13 @@
 #include "camera.hpp"
 #include "models.hpp"
 #include "shader.hpp"
+#include "buoyant.hpp"
 
 #include <iostream>
 #include <vec4.hpp>
 #include <memory>
 #include <tiny_obj_loader.h>
+#include <mat3x3.hpp>
 #include <mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
@@ -22,9 +24,6 @@ using namespace glm;
 #define WAVE_HEIGHT 0.3f;
 
 shared_ptr<Camera> camera;
-shared_ptr<Shader> buoyantShader;
-
-auto buoyantModels = vector<shared_ptr<Model>>();
 
 GLuint oceanHeightmapFramebuffer;
 GLuint oceanHeightmapTexture;
@@ -34,7 +33,15 @@ shared_ptr<Model> oceanGrid;
 shared_ptr<Shader> oceanShader;
 shared_ptr<Model> oceanPlane;
 
-GLuint verticesSSBO, positionsSSBO, angularPositionsSSBO;
+GLuint boatPositionsSSBO, forcesSSBO, boatVelocitiesSSBO,
+       boatAngularVelocitiesSSBO, boatAngularPositionsSSBO, torquesSSBO;
+shared_ptr<Shader> buoyantCalcsShader;
+auto buoyantModels = vector<shared_ptr<Buoyant>>();
+#define REDUCE_SHADER_GROUP_SIZE 16
+size_t maxTriangleCount;
+shared_ptr<Shader> forcesReductionShader;
+shared_ptr<Shader> torquesReductionShader;
+shared_ptr<Shader> buoyantApplicationShader;
 
 GLuint elapsedTime = 0;
 GLuint frameFrequency = 0;
@@ -78,44 +85,107 @@ void render() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, camera->windowWidth, camera->windowHeight);
 
-    // Enable wireframe mode (debugging purposes, remove later)
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // Enable wireframe mode (debugging purposes; remove later)
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    // Draw all buoyant models with the buoyant shader 
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-
-    buoyantShader->BindShader();
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
+    // Run the buoyant shaders on buoyant models 
     {
         mat4 m_vp = camera->GetViewProjectionMatrix();
-        GLuint m_vpLocation = glGetUniformLocation(buoyantShader->shaderProgram, "m_vp");
-        glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
+        GLuint m_vpLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_vp");
+        GLuint m_modelLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_model");
 
         GLfloat waveHeight = WAVE_HEIGHT;
-        GLuint waveHeightLocation = glGetUniformLocation(buoyantShader->shaderProgram, "waveHeight");
-        glUniform1f(waveHeightLocation, waveHeight);
-        for (int i = 0; i < buoyantModels.size(); i++) {
-            mat4 m_model = buoyantModels[i]->GetModelMatrix();
-            GLuint m_modelLocation = glGetUniformLocation(buoyantShader->shaderProgram, "m_model");
-            glUniformMatrix4fv(m_modelLocation, 1, GL_FALSE, value_ptr(m_model));
+        GLuint waveHeightLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "waveHeight");
 
-            mat4 m_mvp = m_vp * m_model;
-            GLuint m_mvpLocation = glGetUniformLocation(buoyantShader->shaderProgram, "m_mvp");
-            glUniformMatrix4fv(m_mvpLocation, 1, GL_FALSE, value_ptr(m_mvp));
+        GLuint boatMassLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatMass");
+        GLuint boatTotalAreaLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatTotalArea");
+        GLuint boatIndexLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatIndex");
+        GLuint boatLengthLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatLength");
+
+        GLuint texLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "oceanHeightmap");
+
+        for (int i = 0; i < buoyantModels.size(); i++) {
+            // Run hydrodynamic/hydrostatic force calculations
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+
+            buoyantCalcsShader->BindShader();
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, oceanHeightmapTexture);
+
+            glUniformMatrix4fv(m_vpLocationCalcs, 1, GL_FALSE, value_ptr(m_vp));
+            
+            glUniform1f(waveHeightLocationCalcs, waveHeight);
+
+            mat4 m_model = buoyantModels[i]->GetModel().GetModelMatrix();
+            glUniformMatrix4fv(m_modelLocationCalcs, 1, GL_FALSE, value_ptr(m_model));
+
+            GLfloat boatMass = buoyantModels[i]->GetMass();
+            glUniform1f(boatMassLocationCalcs, boatMass);
+
+            GLfloat totalArea = buoyantModels[i]->GetModel().GetTotalArea();
+            glUniform1f(boatTotalAreaLocationCalcs, totalArea);
+
+            GLfloat boatLength = buoyantModels[i]->GetModel().GetLength();
+            glUniform1f(boatLengthLocationCalcs, boatLength);
 
             GLuint boatIndex = i;
-            GLuint boatIndexLocation = glGetUniformLocation(buoyantShader->shaderProgram, "boatIndex");
-            glUniform1ui(boatIndexLocation, (boatIndex));
+            glUniform1ui(boatIndexLocationCalcs, (boatIndex));
 
-            GLuint texLocation = glGetUniformLocation(buoyantShader->shaderProgram, "oceanHeightmap");
-            glUniform1i(texLocation, GL_TEXTURE0);
+            glUniform1i(texLocationCalcs, GL_TEXTURE0);
 
-            buoyantModels[i]->draw();
+            buoyantModels[i]->GetModel().draw();
+
+            // Run force and torque SSBO sum reduction
+            // The "q = (dividend + divisor - 1) / dividor" style divisions
+            // here are just a hacky way of getting the ceiling of fractional
+            // when we're only working with integers
+            GLuint totalForcesLocationReducs = glGetUniformLocation(forcesReductionShader->shaderProgram, "totalForces");
+            GLuint totalTorquesLocationReducs = glGetUniformLocation(torquesReductionShader->shaderProgram, "totalTorques");
+            for (GLuint totalElements = maxTriangleCount * 3; totalElements > 1;
+                 totalElements = (totalElements + REDUCE_SHADER_GROUP_SIZE * 2 - 1) / (REDUCE_SHADER_GROUP_SIZE * 2)) {
+                GLuint totalWorkGroups = (totalElements + REDUCE_SHADER_GROUP_SIZE * 2 - 1) / (REDUCE_SHADER_GROUP_SIZE * 2);
+                
+                forcesReductionShader->BindShader();
+                glUniform1ui(totalForcesLocationReducs, totalElements);
+                glDispatchCompute(totalWorkGroups, 1, 1);
+                
+                torquesReductionShader->BindShader();
+                
+                glUniform1ui(totalTorquesLocationReducs, totalElements);
+                glDispatchCompute(totalWorkGroups, 1, 1);
+                
+                glMemoryBarrier(GL_ALL_BARRIER_BITS);
+            }
+
+            // Render the models with the force application shader
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_CULL_FACE);
+
+            buoyantApplicationShader->BindShader();
+
+            GLuint boatIndexLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatIndex");
+            GLuint boatMassLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatMass");
+            GLuint boatInverseInertiaLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatInverseInertia");
+            GLuint deltaTimeLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "deltaTime");
+            GLuint m_vpLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_vp");
+            GLuint m_modelLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_model");
+
+            for (int i = 0; i < buoyantModels.size(); i++) {
+                glUniform1i(boatIndexLocation, i);
+                glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
+                glUniformMatrix3fv(boatInverseInertiaLocation, 1, GL_FALSE, value_ptr(buoyantModels[i]->GetInvInertia()));
+                glUniform1ui(deltaTimeLocation, frameFrequency);
+                glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
+                glUniformMatrix4fv(m_modelLocation, 1, GL_FALSE, value_ptr(m_model));
+                
+                buoyantModels[i]->GetModel().draw();
+            }
+            glMemoryBarrier(GL_ALL_BARRIER_BITS);
         }
     }
+    
 
     // Draw ocean
     glEnable(GL_DEPTH_TEST);
@@ -204,35 +274,51 @@ void initOceanHeightmapRenderTarget() {
 }
 
 void initSSBOs() {
-    float positions_aux[buoyantModels.size() * 4];
-    float angularPositions_aux[buoyantModels.size() * 4];
+    float nBoatsZeroVec4s[buoyantModels.size() * 4];
+    memset(nBoatsZeroVec4s, 0, sizeof(nBoatsZeroVec4s));
 
-    for (int i = 0; i < buoyantModels.size(); i++) {
-        positions_aux[i * 4] = 0.0f;
-        positions_aux[i * 4 + 1] = 0.0f;
-        positions_aux[i * 4 + 2] = 0.0f;
-        positions_aux[i * 4 + 3] = 0.0f;
-
-        angularPositions_aux[i * 4] = 0.0f;
-        angularPositions_aux[i * 4 + 1] = 0.0f;
-        angularPositions_aux[i * 4 + 2] = 0.0f;
-        angularPositions_aux[i * 4 + 3] = 0.0f;
+    maxTriangleCount = buoyantModels[0]->GetModel().GetTriangleCount();
+    for (int i = 1; i < buoyantModels.size(); i++) {
+        size_t triangleCount = buoyantModels[i]->GetModel().GetTriangleCount();
+        if (triangleCount > maxTriangleCount) {
+            maxTriangleCount = triangleCount;
+        }
     }
+    float nMaxTrianglesZeroVec4s[maxTriangleCount * 3 * 4];
+    memset(nMaxTrianglesZeroVec4s, 0, sizeof(nMaxTrianglesZeroVec4s));
 
-    //glGenBuffers(1, &verticesSSBO);
-    //glBindBuffer(GL_SHADER_STORAGE_BUFFER, verticesSSBO);
-    //glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), NULL, GL_DYNAMIC_DRAW);
-    //glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, verticesSSBO);
-    
-    glGenBuffers(1, &positionsSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, positionsSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), positions_aux, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, positionsSSBO);
+    // GLuint boatPositionsSSBO, forcesSSBO, boatVelocitiesSSBO,
+    //   boatAngularPositionsSSBO, boatAngularPositionsSSBO, torquesSSBO;
 
-    glGenBuffers(1, &angularPositionsSSBO);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, positionsSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), angularPositions_aux, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, angularPositionsSSBO);
+    glGenBuffers(1, &boatPositionsSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatPositionsSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, boatPositionsSSBO);
+
+    glGenBuffers(1, &forcesSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, forcesSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, maxTriangleCount * sizeof(vec4) * 3, nMaxTrianglesZeroVec4s, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, forcesSSBO);
+
+    glGenBuffers(1, &boatVelocitiesSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatVelocitiesSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, boatVelocitiesSSBO);
+
+    glGenBuffers(1, &boatAngularVelocitiesSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatAngularVelocitiesSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, boatAngularVelocitiesSSBO);
+
+    glGenBuffers(1, &boatAngularPositionsSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatAngularPositionsSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, boatAngularPositionsSSBO);
+
+    glGenBuffers(1, &torquesSSBO);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, torquesSSBO);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, maxTriangleCount * sizeof(vec4) * 3, nMaxTrianglesZeroVec4s, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, torquesSSBO);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
@@ -273,12 +359,20 @@ int main(int argc, char* argv[]) {
     oceanGrid = make_shared<Model>("models/ocean_grid.obj");
     oceanPlane = make_shared<Model>("models/ocean_plane.obj");
     oceanPlane->SetScale(vec3(64, 0, 64));
-    buoyantModels.push_back(make_shared<Model>(argv[1]));
+    if (argc > 1) {
+        buoyantModels.push_back(make_shared<Buoyant>(argv[1]));
+    }
+    else {
+        buoyantModels.push_back(make_shared<Buoyant>());
+    }
 
     // Load shaders
     oceanShader = make_shared<Shader>("shaders/ocean");
     oceanHeightmapShader = make_shared<Shader>("shaders/ocean_heightmap");
-    buoyantShader = make_shared<Shader>("shaders/buoyant");
+    buoyantCalcsShader = make_shared<Shader>("shaders/buoyant_calcs");
+    forcesReductionShader = make_shared<Shader>("shaders/forces_reduction");
+    torquesReductionShader = make_shared<Shader>("shaders/torques_reduction");
+    buoyantApplicationShader = make_shared<Shader>("shaders/buoyant_application");
 
     // Initialize SSBOs
     initSSBOs();

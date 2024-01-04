@@ -8,6 +8,7 @@ set(SOURCES
     src/camera.cpp
     src/models.cpp
     src/shader.cpp
+    src/buoyant.cpp
 )
 
 # Add executable

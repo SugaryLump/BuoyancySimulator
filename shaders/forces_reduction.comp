@@ -6,7 +6,7 @@ layout (std430, binding = 2) buffer forcesSSBO {
     vec4 forces[];
 };
 
-uniform uint totalforces;
+uniform uint totalForces;
 
 shared vec4[16] forcesAux;
 
@@ -16,12 +16,12 @@ shared vec4[16] forcesAux;
 void main() {
     // get thread ids
     uint lid = gl_LocalInvocationID.x;
-    uint gid = gl_GlobalInvocationID.x * gl_WorkGroupSize.x * 2 + lid;
+    uint gid = gl_WorkGroupID.x * gl_WorkGroupSize.x * 2 + lid;
 
     // each thread gets 2 elements and adds them together (first addition of
     // the reduction, hard coded outside the loop)
-    forcesAux[lid] = gid < totalforces ? forces[gid] : vec4(0);
-    if (gid + gl_WorkGroupSize.x < totalforces) {
+    forcesAux[lid] = gid < totalForces ? forces[gid] : vec4(0);
+    if (gid + gl_WorkGroupSize.x < totalForces) {
         forcesAux[lid] += forces[gid + gl_WorkGroupSize.x];
     }
     memoryBarrierShared();
@@ -34,6 +34,6 @@ void main() {
     }
 
     if (lid == 0) {
-        forces[gl_GlobalInvocationID.x] = forcesAux[0];
+        forces[gl_WorkGroupID.x] = forcesAux[0];
     }
 }
