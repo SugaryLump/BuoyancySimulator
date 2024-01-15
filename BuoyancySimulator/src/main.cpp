@@ -42,6 +42,7 @@ size_t maxTriangleCount;
 shared_ptr<Shader> forcesReductionShader;
 shared_ptr<Shader> torquesReductionShader;
 shared_ptr<Shader> buoyantApplicationShader;
+shared_ptr<Shader> forceVisualizationShader;
 
 GLuint elapsedTime = 0;
 GLuint frameFrequency = 0;
@@ -90,6 +91,7 @@ void render() {
 
     // Run the buoyant shaders on buoyant models 
     {
+        // Get shader uniform locations and calculate needed data
         mat4 m_vp = camera->GetViewProjectionMatrix();
         GLuint m_vpLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_vp");
         GLuint m_modelLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_model");
@@ -104,6 +106,22 @@ void render() {
 
         GLuint texLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "oceanHeightmap");
 
+
+        GLuint m_modelLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "m_model");
+        GLuint m_vpLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "m_vp");
+        GLuint boatIndexLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "boatIndex");
+
+
+        GLuint totalForcesLocationReducs = glGetUniformLocation(forcesReductionShader->shaderProgram, "totalForces");
+        GLuint totalTorquesLocationReducs = glGetUniformLocation(torquesReductionShader->shaderProgram, "totalTorques");
+
+
+        GLuint boatIndexLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatIndex");
+        GLuint boatMassLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatMass");
+        GLuint boatInverseInertiaLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatInverseInertia");
+        GLuint deltaTimeLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "deltaTime");
+        GLuint m_vpLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_vp");
+        GLuint m_modelLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_model");
         for (int i = 0; i < buoyantModels.size(); i++) {
             // Run hydrodynamic/hydrostatic force calculations
             glDisable(GL_DEPTH_TEST);
@@ -137,12 +155,23 @@ void render() {
 
             buoyantModels[i]->GetModel().draw();
 
+            // Run force visualization shader
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+
+            forceVisualizationShader->BindShader();
+
+            glUniformMatrix4fv(m_vpLocationVis, 1, GL_FALSE, value_ptr(m_vp));
+            glUniformMatrix4fv(m_modelLocationVis, 1, GL_FALSE, value_ptr(m_model));
+
+            glUniform1ui(boatIndexLocationVis, boatIndex);
+
+            buoyantModels[i]->GetModel().draw();
+
             // Run force and torque SSBO sum reduction
             // The "q = (dividend + divisor - 1) / dividor" style divisions
             // here are just a hacky way of getting the ceiling of fractional
             // when we're only working with integers
-            GLuint totalForcesLocationReducs = glGetUniformLocation(forcesReductionShader->shaderProgram, "totalForces");
-            GLuint totalTorquesLocationReducs = glGetUniformLocation(torquesReductionShader->shaderProgram, "totalTorques");
             for (GLuint totalElements = maxTriangleCount * 3; totalElements > 1;
                  totalElements = (totalElements + REDUCE_SHADER_GROUP_SIZE * 2 - 1) / (REDUCE_SHADER_GROUP_SIZE * 2)) {
                 GLuint totalWorkGroups = (totalElements + REDUCE_SHADER_GROUP_SIZE * 2 - 1) / (REDUCE_SHADER_GROUP_SIZE * 2);
@@ -165,12 +194,6 @@ void render() {
 
             buoyantApplicationShader->BindShader();
 
-            GLuint boatIndexLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatIndex");
-            GLuint boatMassLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatMass");
-            GLuint boatInverseInertiaLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatInverseInertia");
-            GLuint deltaTimeLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "deltaTime");
-            GLuint m_vpLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_vp");
-            GLuint m_modelLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_model");
 
             for (int i = 0; i < buoyantModels.size(); i++) {
                 glUniform1i(boatIndexLocation, i);
@@ -373,6 +396,7 @@ int main(int argc, char* argv[]) {
     forcesReductionShader = make_shared<Shader>("shaders/forces_reduction");
     torquesReductionShader = make_shared<Shader>("shaders/torques_reduction");
     buoyantApplicationShader = make_shared<Shader>("shaders/buoyant_application");
+    forceVisualizationShader = make_shared<Shader>("shaders/force_visualization");
 
     // Initialize SSBOs
     initSSBOs();
