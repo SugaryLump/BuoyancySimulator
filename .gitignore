@@ -24,7 +24,6 @@ contrib/freeglut-3.4.0/lib
 *.slo
 *.lo
 *.o
-*.obj
 
 # Precompiled Headers
 *.gch
