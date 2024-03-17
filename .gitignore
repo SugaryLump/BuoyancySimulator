@@ -10,10 +10,12 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps
-**/build/**/*
 .vscode
-**/bin/**/*
-**/lib/**/*
+contrib/freeglut-3.4.0/bin
+contrib/freeglut-3.4.0/lib
+/bin
+/build
+/lib
 
 # Prerequisites
 *.d

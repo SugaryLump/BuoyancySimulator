@@ -87,7 +87,7 @@ void render() {
     glViewport(0, 0, camera->windowWidth, camera->windowHeight);
 
     // Enable wireframe mode (debugging purposes; remove later)
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Run the buoyant shaders on buoyant models 
     {
