@@ -5,9 +5,9 @@
 #include <mat3x3.hpp>
 
 #pragma once
-#define DEFAULT_MASS 7
+#define DEFAULT_MASS 400
 #define DEFAULT_CENTER_OF_MASS vec3(0.0)
-#define DEFAULT_INV_INERTIA(v) {{v/(63.241470*DEFAULT_MASS),0,0}, {0,v/(63.267620*DEFAULT_MASS), 0},{ 0,0,v/(63.241470*DEFAULT_MASS)}}
+#define DEFAULT_INERTIA_MODIFIER 0.03614264953
 
 using namespace glm;
 
@@ -16,13 +16,11 @@ class Buoyant {
         Model model;
         float mass;
         vec3 centerOfMass;
-        mat3 invInertia;
+        float invInertia;
 
     public:
-        Buoyant(string modelFileName = "models/boat.hpp",
-                float mass = DEFAULT_MASS,
-                vec3 centerOfMass = DEFAULT_CENTER_OF_MASS);
+        Buoyant(string boatFileName = "models/boat.boat");
         Model GetModel();
         float GetMass();
-        mat3 GetInvInertia();
+        float GetInvInertia();
 };

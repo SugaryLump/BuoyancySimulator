@@ -61,8 +61,8 @@ vec3 applyBoatTransforms(vec3 vertex) {
 
 void main() {
     vec3 A = (m_model * gl_in[0].gl_Position).xyz;
-    vec3 B = (m_model * gl_in[0].gl_Position).xyz;
-    vec3 C = (m_model * gl_in[0].gl_Position).xyz;
+    vec3 B = (m_model * gl_in[1].gl_Position).xyz;
+    vec3 C = (m_model * gl_in[2].gl_Position).xyz;
 
     A = applyBoatTransforms(A);
     B = applyBoatTransforms(B);

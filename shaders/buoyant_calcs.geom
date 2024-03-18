@@ -41,7 +41,7 @@ uniform mat4 m_model;
 out vec4 colorIn;
 
 #define G 9.8
-#define DENSITY 1.0
+#define WATER_DENSITY 997.0
 #define VISCOSITY_VARIATION 0.000001
 
 // Returns a texture coordinate by normalizing a 2D vector
@@ -180,7 +180,7 @@ float triangleArea(vec3 A, vec3 B, vec3 C) {
 // Calculates the buoyancy force exerted on a triangle composed of these vertices
 vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
     float hCenter = surfaceDistance(tCentroid);
-    float force_y = (G * hCenter * DENSITY * tArea * tNormal).y;
+    float force_y = (G * hCenter * WATER_DENSITY * tArea * tNormal).y;
 
     return vec3(0.0, force_y, 0.0);
 }
@@ -220,7 +220,7 @@ vec3 viscousWaterResistance(vec3 tNormal, float tArea, vec3 tVel, float tVelMagn
     vec3 vF = tVelMagnitude * tangentialDir;
     float vFMagnitude = length(vF);
     
-    return 0.5 * DENSITY * resC * tArea * vFMagnitude * vF;
+    return 0.5 * WATER_DENSITY * resC * tArea * vFMagnitude * vF;
 }
 
 // Calculates this triangle's cos-theta (unsure what this is)
@@ -273,9 +273,9 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
     forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
-                         viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
-                         pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
-                         slammingForce(tArea, tCosTheta);
+                         //viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
+                         //pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
+                         //slammingForce(tArea, tCosTheta);
 
     // Using boat position as a center of mass is EXTREMELY sus
     // Give this a closer look eventually...

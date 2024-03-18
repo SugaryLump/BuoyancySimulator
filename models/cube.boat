@@ -1,0 +1,6 @@
+modelFile=cube.obj
+mass=400
+worldPosition=0,0,0
+centerOfMass=0,0,-1.5
+volume=1
+inertiaModifier=0.03821823605
