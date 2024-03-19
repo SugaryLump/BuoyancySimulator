@@ -19,7 +19,7 @@
 using namespace std;
 using namespace glm;
 
-Model::Model(string objFilename)
+Model::Model(string objFilename, float volume, vec3 worldPosition)
 {
     // Load .obj
     tinyobj::attrib_t attrib;
@@ -127,7 +127,7 @@ Model::Model(string objFilename)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // Set matrices
-    this->translation = mat4(1.0f);
+    this->translation = mat4({{1, 0, 0, worldPosition.x}, {0, 0, 0, worldPosition.y}, {0, 0, 0, worldPosition.z}, {0, 0, 0, 1}});
     this->rotation = mat4(1.0f);
     this->scale = mat4(1.0f);
     this->modelMatrix = mat4(1.0f);
@@ -153,8 +153,7 @@ Model::Model(string objFilename)
     }
 
     this->length = std::max(xmax - xmin, zmax - zmin);
-    // Using a default volume value here. Eventually needs actual implementing.
-    this->volume = DEFAULT_VOLUME;
+    this->volume = volume;
 
     cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << ")" << endl;
 }

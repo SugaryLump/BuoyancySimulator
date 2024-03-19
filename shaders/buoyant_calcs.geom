@@ -31,6 +31,7 @@ uniform int boatIndex;
 uniform float boatMass;
 uniform float boatTotalArea;
 uniform float boatLength;
+uniform vec3 boatCenterOfMass;
 
 uniform float waveHeight;
 uniform sampler2D oceanHeightmap;

@@ -30,7 +30,7 @@ class Model {
 
     public:
         Model() = default;
-        Model(string objFilename);
+        Model(string objFilename, float volume = 1, vec3 worldPosition = {0, 0, 0});
         mat4 GetModelMatrix();
         void SetScale(vec3 scale);
         void UpdateModelMatrix();

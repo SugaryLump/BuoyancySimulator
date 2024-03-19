@@ -16,11 +16,12 @@ class Buoyant {
         Model model;
         float mass;
         vec3 centerOfMass;
-        float invInertia;
+        float inertiaModifier;
 
     public:
         Buoyant(string boatFileName = "models/boat.boat");
         Model GetModel();
         float GetMass();
-        float GetInvInertia();
+        float GetInertiaModifier();
+        vec3 GetCenterOfMass();
 };

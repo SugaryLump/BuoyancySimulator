@@ -95,15 +95,13 @@ void render() {
         mat4 m_vp = camera->GetViewProjectionMatrix();
         GLuint m_vpLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_vp");
         GLuint m_modelLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_model");
-
         GLfloat waveHeight = WAVE_HEIGHT;
         GLuint waveHeightLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "waveHeight");
-
         GLuint boatMassLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatMass");
         GLuint boatTotalAreaLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatTotalArea");
         GLuint boatIndexLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatIndex");
         GLuint boatLengthLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatLength");
-
+        GLuint boatCenterOfMassCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatCenterOfMass");
         GLuint texLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "oceanHeightmap");
 
 
@@ -118,7 +116,7 @@ void render() {
 
         GLuint boatIndexLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatIndex");
         GLuint boatMassLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatMass");
-        GLuint boatInverseInertiaLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatInverseInertia");
+        GLuint boatInertiaModifierLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatInertiaModifier");
         GLuint deltaTimeLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "deltaTime");
         GLuint m_vpLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_vp");
         GLuint m_modelLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_model");
@@ -147,6 +145,9 @@ void render() {
 
             GLfloat boatLength = buoyantModels[i]->GetModel().GetLength();
             glUniform1f(boatLengthLocationCalcs, boatLength);
+
+            vec3 boatCenterOfMass = buoyantModels[i]->GetCenterOfMass();
+            glUniform3f(boatCenterOfMassCalcs, boatCenterOfMass.x, boatCenterOfMass.y, boatCenterOfMass.z);
 
             GLuint boatIndex = i;
             glUniform1ui(boatIndexLocationCalcs, (boatIndex));
@@ -198,7 +199,7 @@ void render() {
             for (int i = 0; i < buoyantModels.size(); i++) {
                 glUniform1i(boatIndexLocation, i);
                 glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
-                glUniformMatrix3fv(boatInverseInertiaLocation, 1, GL_FALSE, value_ptr(buoyantModels[i]->GetInvInertia()));
+                glUniform1f(boatInertiaModifierLocation, buoyantModels[i]->GetInertiaModifier());
                 glUniform1ui(deltaTimeLocation, frameFrequency);
                 glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
                 glUniformMatrix4fv(m_modelLocation, 1, GL_FALSE, value_ptr(m_model));

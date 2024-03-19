@@ -35,7 +35,7 @@ layout (std430, binding = 8) buffer torquesSSBO {
 
 uniform int boatIndex;
 uniform float boatMass;
-uniform mat3 boatInverseInertia;
+uniform float boatInertiaModifier;
 
 uniform uint deltaTime;
 
@@ -58,7 +58,7 @@ vec3 nextPosition(vec3 velocity, float deltaTime) {
 }
 
 vec3 nextAngularVelocity(float deltaTime) {
-    vec3 acceleration = boatInverseInertia * torques[0].xyz;
+    vec3 acceleration = boatInertiaModifier * torques[0].xyz;
     return boatAngularVelocities[boatIndex].xyz + acceleration * deltaTime;
 }
 
