@@ -40,8 +40,8 @@ uniform float boatInertiaModifier;
 uniform uint deltaTime;
 
 uniform mat4 m_vp;
-uniform mat4 m_model;
-
+uniform mat4 m_scale_rotation;
+uniform mat4 m_translation;
 
 vec3 nextVelocity(vec3 F, float deltaTime) {
     vec3 acceleration = 1.0 / boatMass * F;
@@ -91,12 +91,29 @@ vec3 rotate(vec3 vector, vec3 angularPosition) {
     return rotationMatrix * vector; 
 }
 
+// Apply model transforms to trasnform vertex to world space
+vec3 applyBoatTransforms(vec4 vertex) {
+    vec3 worldVertex = vec3(vertex);
+    // 1. & 2. Apply model scaling and then rotation
+    worldVertex = vec3(m_scale_rotation * vec4(worldVertex, 1.0));
+    // 3. Apply center of mass translation
+    // worldVertex = worldVertex - boatCenterOfMass;
+    // 4. Apply boat rotation
+    worldVertex = rotate(worldVertex, vec3(boatAngularPositions[boatIndex]));
+    // 5. Apply model translation
+    worldVertex = vec3(m_translation * vec4(worldVertex, 1.0));
+    // 6. Apply boat translation
+    worldVertex = worldVertex + vec3(boatPositions[boatIndex]);
+
+    return worldVertex;
+}
+
 void main() {
     vec3 gravity = boatMass * vec3(0.0, -9.8, 0.0);
 
     vec3 F = forces[0].xyz + gravity;
 
-    float deltaTimeSeconds = deltaTime / 1000.0;
+    float deltaTimeSeconds = float(deltaTime) / 1000.0;
 
     vec3 newVelocity = nextVelocity(F, deltaTimeSeconds);
     vec3 newPosition = nextPosition(newVelocity, deltaTimeSeconds);
@@ -108,5 +125,6 @@ void main() {
     boatAngularVelocities[boatIndex] = vec4(newAngularVelocity, 0.0);
     boatAngularPositions[boatIndex] = vec4(newAngularPosition, 0.0);
 
-    gl_Position = m_vp * m_model * vec4(rotate(vertex, newAngularPosition) + newPosition, 1.0);
+    // gl_Position = m_vp * m_model * vec4(rotate(vertex, newAngularPosition) + newPosition, 1.0);
+    gl_Position = m_vp *  vec4(applyBoatTransforms(vec4(vertex, 1.0)), 1.0);
 }

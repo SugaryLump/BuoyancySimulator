@@ -127,10 +127,10 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // Set matrices
-    this->translation = mat4({{1, 0, 0, worldPosition.x}, {0, 0, 0, worldPosition.y}, {0, 0, 0, worldPosition.z}, {0, 0, 0, 1}});
+    this->translation = mat4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {worldPosition.x, worldPosition.y, worldPosition.z, 1});
     this->rotation = mat4(1.0f);
     this->scale = mat4(1.0f);
-    this->modelMatrix = mat4(1.0f);
+    UpdateMatrices();
 
     cout << "Finished loading model " << objFilename << endl;
 
@@ -158,6 +158,14 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
     cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << ")" << endl;
 }
 
+mat4 Model::GetTranslationMatrix() {
+    return this->translation;
+}
+
+mat4 Model::GetScaleRotationMatrix() {
+    return this->scaleRotationMatrix;
+}
+
 mat4 Model::GetModelMatrix() {
     return this->modelMatrix;
 }
@@ -167,11 +175,12 @@ void Model::SetScale(vec3 scale) {
                        0.0,       scale.y,   0.0,      0.0,
                        0.0,       0.0,       scale.z,  0.0,
                        0.0,       0.0,       0.0,      1.0);
-    UpdateModelMatrix();
+    UpdateMatrices();
 }
 
-void Model::UpdateModelMatrix() {
-    this->modelMatrix = this->translation * this->rotation * this->scale;
+void Model::UpdateMatrices() {
+    this->scaleRotationMatrix = this->rotation * this->scale;
+    this->modelMatrix = this->translation * this->scaleRotationMatrix;
 }
 
 int Model::GetTriangleCount() {

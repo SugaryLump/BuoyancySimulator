@@ -42,33 +42,33 @@ Buoyant::Buoyant(string boatFileName) {
             cout << "modelFile=" << value << endl;
         }
         else if (key.compare("mass") == 0) {
-            this->mass = stoi(value);
+            this->mass = stof(value);
             cout << "mass=" << value << endl;
         }
         else if (key.compare("worldPosition") == 0) {
+            istringstream valueStream(value);
             for (int i = 0; i < 3; i++) {
-                istringstream valueStream(value);
                 string number;
-                getline(valueStream, number);
-                worldPosition[i] = stoi(number);
+                getline(valueStream, number, ',');
+                worldPosition[i] = stof(number);
             }
             cout << "worldPosition=(" << worldPosition.x << "; " << worldPosition.y << "; " << worldPosition.z << ")" << endl;
         }
         else if (key.compare("centerOfMass") == 0) {
+            istringstream valueStream(value);
             for (int i = 0; i < 3; i++) {
-                istringstream valueStream(value);
                 string number;
-                getline(valueStream, number);
-                this->centerOfMass[i] = stoi(number);
+                getline(valueStream, number, ',');
+                this->centerOfMass[i] = stof(number);
             }
             cout << "centerOfMass=(" << this->centerOfMass.x << "; " << this->centerOfMass.y << "; " << this->centerOfMass.z << ")" << endl;
         }
         else if (key.compare("volume") == 0) {
-            volume = stoi(value);
+            volume = stof(value);
             cout << "volume=" << volume << endl;
         }
-        else if (key.compare("intertiaModifier") == 0) {
-            this->inertiaModifier = stoi(value);
+        else if (key.compare("inertiaModifier") == 0) {
+            this->inertiaModifier = stof(value);
             cout << "inertiaModifier" << this->inertiaModifier << endl;
         }
     }

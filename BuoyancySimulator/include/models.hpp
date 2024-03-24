@@ -18,6 +18,7 @@ class Model {
         mat4 translation;
         mat4 rotation;
         mat4 scale;
+        mat4 scaleRotationMatrix;
         mat4 modelMatrix;
         shared_ptr<GLuint> vao;
         int minIndex;
@@ -30,10 +31,12 @@ class Model {
 
     public:
         Model() = default;
-        Model(string objFilename, float volume = 1, vec3 worldPosition = {0, 0, 0});
+        Model(string objFilename, float volume = 1, vec3 worldPosition = {0.0, 0.0, 0.0});
+        mat4 GetTranslationMatrix();
+        mat4 GetScaleRotationMatrix();
         mat4 GetModelMatrix();
         void SetScale(vec3 scale);
-        void UpdateModelMatrix();
+        void UpdateMatrices();
         int GetTriangleCount();
         float GetTotalArea();
         float GetVolume();

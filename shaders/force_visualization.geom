@@ -19,7 +19,8 @@ layout (std430, binding = 8) buffer torquesSSBO {
     vec4 torques[];
 };
 
-uniform mat4 m_model;
+uniform mat4 m_scale_rotation;
+uniform mat4 m_translation;
 uniform mat4 m_vp;
 
 uniform int boatIndex;
@@ -55,18 +56,27 @@ vec3 triangleCentroid(vec3 A, vec3 B, vec3 C) {
     return (A + B + C) / 3.0;
 }
 
-vec3 applyBoatTransforms(vec3 vertex) {
-    return rotate(vertex, boatAngularPositions[boatIndex].xyz) + boatPositions[boatIndex].xyz;
+// Apply model transforms to trasnform vertex to world space
+vec3 applyBoatTransforms(vec4 vertex) {
+    vec3 worldVertex = vec3(vertex);
+    // 1. & 2. Apply model scaling and then rotation
+    worldVertex = vec3(m_scale_rotation * vec4(worldVertex, 1.0));
+    // 3. Apply center of mass translation
+    // worldVertex = worldVertex - boatCenterOfMass;
+    // 4. Apply boat rotation
+    worldVertex = rotate(worldVertex, vec3(boatAngularPositions[boatIndex]));
+    // 5. Apply model translation
+    worldVertex = vec3(m_translation * vec4(worldVertex, 1.0));
+    // 6. Apply boat translation
+    worldVertex = worldVertex + vec3(boatPositions[boatIndex]);
+
+    return worldVertex;
 }
 
 void main() {
-    vec3 A = (m_model * gl_in[0].gl_Position).xyz;
-    vec3 B = (m_model * gl_in[1].gl_Position).xyz;
-    vec3 C = (m_model * gl_in[2].gl_Position).xyz;
-
-    A = applyBoatTransforms(A);
-    B = applyBoatTransforms(B);
-    C = applyBoatTransforms(C);
+    vec3 A = applyBoatTransforms(gl_in[0].gl_Position);
+    vec3 B = applyBoatTransforms(gl_in[1].gl_Position);
+    vec3 C = applyBoatTransforms(gl_in[2].gl_Position);
 
     vec3 center = triangleCentroid(A, B, C);
     vec3 totalTriangleForce = forces[gl_PrimitiveIDIn * 3].xyz + forces[gl_PrimitiveIDIn * 3 + 1].xyz + forces[gl_PrimitiveIDIn * 3 + 2].xyz;

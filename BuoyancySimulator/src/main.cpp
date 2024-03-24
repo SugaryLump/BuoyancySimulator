@@ -94,7 +94,8 @@ void render() {
         // Get shader uniform locations and calculate needed data
         mat4 m_vp = camera->GetViewProjectionMatrix();
         GLuint m_vpLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_vp");
-        GLuint m_modelLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_model");
+        GLuint m_scaleRotationLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_scale_rotation");
+        GLuint m_translationLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "m_translation");
         GLfloat waveHeight = WAVE_HEIGHT;
         GLuint waveHeightLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "waveHeight");
         GLuint boatMassLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatMass");
@@ -105,7 +106,8 @@ void render() {
         GLuint texLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "oceanHeightmap");
 
 
-        GLuint m_modelLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "m_model");
+        GLuint m_scaleRotationLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "m_scale_rotation");
+        GLuint m_translationLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "m_translation");
         GLuint m_vpLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "m_vp");
         GLuint boatIndexLocationVis = glGetUniformLocation(forceVisualizationShader->shaderProgram, "boatIndex");
 
@@ -119,7 +121,8 @@ void render() {
         GLuint boatInertiaModifierLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "boatInertiaModifier");
         GLuint deltaTimeLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "deltaTime");
         GLuint m_vpLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_vp");
-        GLuint m_modelLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_model");
+        GLuint m_scaleRotationLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_scale_rotation");
+        GLuint m_translationLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_translation");
         for (int i = 0; i < buoyantModels.size(); i++) {
             // Run hydrodynamic/hydrostatic force calculations
             glDisable(GL_DEPTH_TEST);
@@ -134,8 +137,11 @@ void render() {
             
             glUniform1f(waveHeightLocationCalcs, waveHeight);
 
-            mat4 m_model = buoyantModels[i]->GetModel().GetModelMatrix();
-            glUniformMatrix4fv(m_modelLocationCalcs, 1, GL_FALSE, value_ptr(m_model));
+            mat4 m_scale_rotation = buoyantModels[i]->GetModel().GetScaleRotationMatrix();
+            glUniformMatrix4fv(m_scaleRotationLocationCalcs, 1, GL_FALSE, value_ptr(m_scale_rotation));
+
+            mat4 m_translation = buoyantModels[i]->GetModel().GetTranslationMatrix();
+            glUniformMatrix4fv(m_translationLocationCalcs, 1, GL_FALSE, value_ptr(m_translation));
 
             GLfloat boatMass = buoyantModels[i]->GetMass();
             glUniform1f(boatMassLocationCalcs, boatMass);
@@ -163,7 +169,8 @@ void render() {
             forceVisualizationShader->BindShader();
 
             glUniformMatrix4fv(m_vpLocationVis, 1, GL_FALSE, value_ptr(m_vp));
-            glUniformMatrix4fv(m_modelLocationVis, 1, GL_FALSE, value_ptr(m_model));
+            glUniformMatrix4fv(m_scaleRotationLocationVis, 1, GL_FALSE, value_ptr(m_scale_rotation));
+            glUniformMatrix4fv(m_translationLocationVis, 1, GL_FALSE, value_ptr(m_translation));
 
             glUniform1ui(boatIndexLocationVis, boatIndex);
 
@@ -202,7 +209,8 @@ void render() {
                 glUniform1f(boatInertiaModifierLocation, buoyantModels[i]->GetInertiaModifier());
                 glUniform1ui(deltaTimeLocation, frameFrequency);
                 glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
-                glUniformMatrix4fv(m_modelLocation, 1, GL_FALSE, value_ptr(m_model));
+                glUniformMatrix4fv(m_scaleRotationLocation, 1, GL_FALSE, value_ptr(m_scale_rotation));
+                glUniformMatrix4fv(m_translationLocation, 1, GL_FALSE, value_ptr(m_translation));
                 
                 buoyantModels[i]->GetModel().draw();
             }
