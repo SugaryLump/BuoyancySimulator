@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(triangle_strip, max_vertices=9) out;
+layout(triangle_strip, max_vertices=18) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -190,6 +190,86 @@ vec3 triangleCentroid(vec3 A, vec3 B, vec3 C) {
     return (A + B + C) / 3.0;
 }
 
+// Splits the triangle into two triangles with horizontal bases by
+// finding a point along the line defined by highest and lowest
+// vertices and connecting it to the middle point
+// Places apexes of new triangles as the first element of the arrays
+void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
+    // High, Middle, Middle New, Low
+    int H, M, L;
+    vec3 MN;
+
+    H = 0;
+    if (triangle[1].y > triangle[H].y) {
+        M = 0;
+        H = 1;
+    }
+    else {
+        M = 1;
+    }
+
+    if (triangle[2].y > triangle[H].y) {
+        L = M;
+        M = H;
+        H = 2;
+    }
+    else if (triangle[2].y > triangle[M].y) {
+        L = M;
+        M = 2;
+    }
+    else {
+        L = 2;
+    }
+
+    vec3 upwardsTriangle[3];
+    vec3 downwardsTriangle[3];
+
+    // k is the fraction of HL that we can add to H to obtain HM
+    vec3 HL = triangle[L] - triangle[H];
+    float k = (triangle[M].y - triangle[H].y) / HL.y;
+    MN = triangle[H] + HL * k;
+
+    upwardsTriangle[0] = triangle[H];
+    downwardsTriangle[0] = triangle[L];
+    if (M == H + 1 || M == H - 2) {
+        upwardsTriangle[1] = triangle[M];
+        upwardsTriangle[2] = MN;
+        downwardsTriangle[1] = MN;
+        downwardsTriangle[2] = triangle[M];
+    }
+    else {
+        upwardsTriangle[1] = MN;
+        upwardsTriangle[2] = triangle[M];
+        downwardsTriangle[1] = triangle[M];
+        downwardsTriangle[2] = MN;
+    }
+
+    trianglesOut[0] = upwardsTriangle;
+    trianglesOut[1] = downwardsTriangle;
+}
+
+// Calculates the real buoyancy force point of application for a given triangle with a horizontal base.
+// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT IT'S Y IS HIGHER THAN THE BASE'S!!
+vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C, out bool isFlat) {
+    isFlat = false;
+
+    float h = A.y - C.y;
+
+    if (h == 0) {
+        isFlat = true;
+        return vec3(0.0);
+    }
+    else {
+        float z0 = surfaceDistance(A);
+        float tc = (4 * z0 + 3 * h) / (6 * z0 + 4 * h);
+
+        vec3 D = (C + B) / 2;
+        vec3 AD = D - A;
+
+        return A + AD * tc;
+    }
+}
+
 // Calculates the area of a triangle composed of these vertices
 float triangleArea(vec3 A, vec3 B, vec3 C) {
     return length(cross(B - A, C - A)) / 2;
@@ -290,13 +370,14 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
+    vec3[2][3] horizontalBaseTriangles;
+    //horizontalBaseSplit([vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]], horizontalBaseTriangles);
+
     forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
                          //viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
                          //pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
                          //slammingForce(tArea, tCosTheta);
 
-    // Using boat position as a center of mass is EXTREMELY sus
-    // Give this a closer look eventually...
     torquesArray[index] = cross(tCentroid - worldCenterOfMass, forcesArray[index]);
 }
 
