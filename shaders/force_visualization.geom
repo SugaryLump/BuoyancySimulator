@@ -80,30 +80,22 @@ void main() {
 
     vec3 center = triangleCentroid(A, B, C);
     vec3 totalTriangleForce = forces[gl_PrimitiveIDIn * 3].xyz + forces[gl_PrimitiveIDIn * 3 + 1].xyz + forces[gl_PrimitiveIDIn * 3 + 2].xyz;
-    vec3 totalTriangleTorque = torques[gl_PrimitiveIDIn * 3].xyz + torques[gl_PrimitiveIDIn * 3 + 1].xyz + torques[gl_PrimitiveIDIn * 3 + 2].xyz;
 
-    vec3 F = center + totalTriangleForce / 10.0;
-    vec3 T = center + totalTriangleTorque / 10.0;
+    vec3 F = center + totalTriangleForce / 100000.0;
+    if (totalTriangleForce.y > 0) {
+        colorIn = vec4(0.0, 1.0, 0.0, 1.0);
+    }
+    else {
+        colorIn = vec4(1.0, 0.0, 0.0, 1.0);
+    }
 
     vec4 V1 = m_vp * vec4(center.xyz, 1.0);
     gl_Position = V1;
-    colorIn = vec4(0.0, length(totalTriangleForce) / 1.0, 0.0, 1.0);
     EmitVertex();
 
     vec4 V2 = m_vp * vec4(F, 1.0);
     gl_Position = V2;
-    colorIn = vec4(0.0, length(totalTriangleForce) / 1.0, 0.0, 1.0);
-    EmitVertex();
-    EndPrimitive();
-    
-    vec4 V3 = m_vp * vec4(center, 1.0);
-    gl_Position = V3;
-    colorIn = vec4(0.0, 0.0, length(totalTriangleTorque) / 1.0, 1.0);
     EmitVertex();
 
-    vec4 V4 = m_vp * vec4(T, 1.0);
-    gl_Position = V4;
-    colorIn = vec4(0.0, 0.0, length(totalTriangleTorque) / 1.0, 1.0);
-    EmitVertex();
     EndPrimitive();
 }

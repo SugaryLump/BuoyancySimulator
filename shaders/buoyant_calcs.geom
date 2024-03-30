@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(triangle_strip, max_vertices=18) out;
+layout(triangle_strip, max_vertices=9) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -163,10 +163,24 @@ vec3 applyBoatTransforms(vec4 vertex, mat4 m_model) {
 // Transforms an #workingTriangles amount of vertices (must be multiple of 3)
 // in the vertex array transforming them to projection space and then emits
 // the appropriate amount of triangles 
-void transformAndEmitVertices(vec3[9] vertices, int workingTriangles) {
-    for (int i = 0; i < workingTriangles; i++) {
+void transformAndEmitVertices(vec3[9] vertices) {
+    for (int i = 0; i < 9; i++) {
         for (int v = 0; v < 3; v++) {
             vec4 vertex = m_vp * vec4(vertices[i * 3 + v], 1.0);
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices) {
+    for (int i = 0; i < 2; i++) {
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * vec4(vertices[i][v], 1.0);
             //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
             //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
             gl_Position = vertex;
@@ -226,7 +240,13 @@ void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
 
     // k is the fraction of HL that we can add to H to obtain HM
     vec3 HL = triangle[L] - triangle[H];
-    float k = (triangle[M].y - triangle[H].y) / HL.y;
+    float k;
+    if (HL.y == 0) {
+        k = 0.5;
+    }
+    else {
+        k = (triangle[M].y - triangle[H].y) / HL.y;
+    }
     MN = triangle[H] + HL * k;
 
     upwardsTriangle[0] = triangle[H];
@@ -248,26 +268,32 @@ void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
     trianglesOut[1] = downwardsTriangle;
 }
 
-// Calculates the real buoyancy force point of application for a given triangle with a horizontal base.
+// Calculates the real buoyancy force point of application for a given submerged
+// triangle with a horizontal base.
 // ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT IT'S Y IS HIGHER THAN THE BASE'S!!
-vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C, out bool isFlat) {
-    isFlat = false;
-
+vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
     float h = A.y - C.y;
+    float z0 = surfaceDistance(A);
+    float tc = (4 * z0 + 3 * h) / (6 * z0 + 4 * h);
 
-    if (h == 0) {
-        isFlat = true;
-        return vec3(0.0);
-    }
-    else {
-        float z0 = surfaceDistance(A);
-        float tc = (4 * z0 + 3 * h) / (6 * z0 + 4 * h);
+    vec3 D = (C + B) / 2;
+    vec3 AD = D - A;
 
-        vec3 D = (C + B) / 2;
-        vec3 AD = D - A;
+    return A + AD * tc;
+}
 
-        return A + AD * tc;
-    }
+// Calculates the real buoyancy force point of application for a given
+// submergedtriangle with a horizontal base.
+// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT IT'S Y IS LOWER THAN THE BASE'S!!
+vec3 downwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
+    float h = C.y - A.y;
+    float z0 = surfaceDistance(B);
+    float tc = (2 * z0 + h) / (6 * z0 + 2 * h);
+    
+    vec3 D = (C + B) / 2;
+    vec3 DA = A - D;
+
+    return D + DA * tc;
 }
 
 // Calculates the area of a triangle composed of these vertices
@@ -370,15 +396,34 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
-    vec3[2][3] horizontalBaseTriangles;
-    //horizontalBaseSplit([vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]], horizontalBaseTriangles);
+    vec3 force;
+    vec3 torque;
 
-    forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
+    vec3[2][3] horBaseTriangles;
+    horizontalBaseSplit(vec3[3](vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]), horBaseTriangles);
+    vec3 upPointOfApplication = upwardTrianglePointOfApplication(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
+    vec3 downPointOfApplication = upwardTrianglePointOfApplication(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    float upArea = triangleArea(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
+    float downArea = triangleArea(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    vec3 upBuoyancyForce = buoyancyForce(upPointOfApplication, tNormal, upArea);
+    vec3 downBuoyancyForce = buoyancyForce(downPointOfApplication, tNormal, downArea);
+    vec3 upBuoyancyTorque = cross(upPointOfApplication - worldCenterOfMass, upBuoyancyForce);
+    vec3 downBuoyancyTorque = cross(downPointOfApplication - worldCenterOfMass, downBuoyancyForce);
+
+    force = upBuoyancyForce + downBuoyancyForce;
+    torque = upBuoyancyTorque + downBuoyancyTorque;
+
+    forcesArray[index] = force;
+    torquesArray[index] = torque;
+
+    // transformAndEmitVertices(horBaseTriangles);
+
+    // forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
                          //viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
                          //pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
                          //slammingForce(tArea, tCosTheta);
 
-    torquesArray[index] = cross(tCentroid - worldCenterOfMass, forcesArray[index]);
+    // torquesArray[index] = cross(tCentroid - worldCenterOfMass, forcesArray[index]);
 }
 
 void main() {
@@ -552,7 +597,7 @@ void main() {
         }
     }
 
-    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
+    forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 2] = vec4(forcesAux[2], 0.0);
 
