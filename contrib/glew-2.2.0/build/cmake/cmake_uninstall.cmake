@@ -1,13 +1,13 @@
-if(NOT EXISTS "/home/sugarylump/Work/Tese/BuoyancySimulator/install_manifest.txt")
-  message(FATAL_ERROR "Cannot find install manifest: /home/sugarylump/Work/Tese/BuoyancySimulator/install_manifest.txt")
-endif(NOT EXISTS "/home/sugarylump/Work/Tese/BuoyancySimulator/install_manifest.txt")
+if(NOT EXISTS "/home/sugarylump/Tese/BuoyancySimulator/install_manifest.txt")
+  message(FATAL_ERROR "Cannot find install manifest: /home/sugarylump/Tese/BuoyancySimulator/install_manifest.txt")
+endif(NOT EXISTS "/home/sugarylump/Tese/BuoyancySimulator/install_manifest.txt")
 
 if (NOT DEFINED CMAKE_INSTALL_PREFIX)
   set (CMAKE_INSTALL_PREFIX "/usr/local")
 endif ()
  message(${CMAKE_INSTALL_PREFIX})
 
-file(READ "/home/sugarylump/Work/Tese/BuoyancySimulator/install_manifest.txt" files)
+file(READ "/home/sugarylump/Tese/BuoyancySimulator/install_manifest.txt" files)
 string(REGEX REPLACE "\n" ";" files "${files}")
 foreach(file ${files})
   message(STATUS "Uninstalling $ENV{DESTDIR}${file}")

@@ -93,6 +93,7 @@ void main() {
     gl_Position = V1;
     EmitVertex();
 
+    // vec4 V2 = m_vp * (vec4(normal(A, B, C), 1.0) + vec4(center.xyz, 0.0));
     vec4 V2 = m_vp * vec4(F, 1.0);
     gl_Position = V2;
     EmitVertex();
