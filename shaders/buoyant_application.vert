@@ -113,7 +113,7 @@ void main() {
 
     vec3 F = forces[0].xyz + gravity;
 
-    float deltaTimeSeconds = float(deltaTime) / 1000.0;
+    float deltaTimeSeconds = float(deltaTime) / 1000.0 * 0.1;
 
     vec3 newVelocity = nextVelocity(F, deltaTimeSeconds);
     vec3 newPosition = nextPosition(newVelocity, deltaTimeSeconds);

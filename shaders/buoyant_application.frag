@@ -10,5 +10,5 @@ void main() {
     //color = colorIn;
     //color = vec4(forces[0].xyz, 1.0);
     //color = vec4(1.0, forces[0].y, forces[0].y, 1.0);
-    color = vec4(vec3(1.0), 1);
+    //color = vec4(vec3(1.0), 1);
 }

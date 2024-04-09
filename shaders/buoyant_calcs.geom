@@ -234,7 +234,7 @@ void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
     }
 
     trianglesOut[0] = upwardsTriangle;
-    trianglesOut[1] = downwardsTriangle;
+    trianglesOut[1] = triangle;
 }
 
 // Calculates the real buoyancy force point of application for a given submerged
@@ -390,8 +390,29 @@ void transformAndEmitVertices(vec3[9] vertices, int workingTriangles) {
 
 void transformAndEmitVertices(vec3[2][3] vertices) {
     for (int i = 0; i < 2; i++) {
-        float area = triangleArea(vertices[i][0], vertices[i][1], vertices[i][2]);
-        colorIn = vec4(i, 1-i, 1.0, 20 * area);
+        colorIn = vec4(i, 0.35, 1-i, 1.0);
+        for (int v = 0; v < 3; v++) {
+            //vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0) + (i*2-1) * vec4(0, 0.05, 0, 0));
+            vec4 vertex = m_vp * vec4(vertices[i][v], 1.0);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices, float upArea, float downArea, float tArea) {
+    for (int i = 0; i < 2; i++) {
+        if (i == 0) {
+            colorIn = vec4(upArea/tArea, 0.5, 0.5, 0.8);
+        }
+        else {
+            colorIn = vec4(downArea/tArea, 0.5, 0.5, 0.8);
+        }
+        if (colorIn.x > 1.001) {
+            colorIn = vec4(0, 1, 0 , 1);
+        }
         for (int v = 0; v < 3; v++) {
             vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
             //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
@@ -403,6 +424,22 @@ void transformAndEmitVertices(vec3[2][3] vertices) {
     }
     
 }
+
+void transformAndEmitVertices(vec3[2][3] vertices, vec3 n) {
+    for (int i = 0; i < 2; i++) {
+        colorIn = abs(vec4(n/2, 1.0));
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
 
 void transformAndEmitVertices(vec3[9] vertices, int i, bool dummy) {
     float area = triangleArea(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
@@ -445,7 +482,7 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     forcesArray[index] = force;
     torquesArray[index] = torque;
 
-    //transformAndEmitVertices(horBaseTriangles);
+    transformAndEmitVertices(horBaseTriangles);
     //transformAndEmitVertices(vertices, index, false);
 
     //forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);

@@ -126,7 +126,7 @@ void render() {
         for (int i = 0; i < buoyantModels.size(); i++) {
             // Run hydrodynamic/hydrostatic force calculations
             glDisable(GL_DEPTH_TEST);
-            glDisable(GL_CULL_FACE);
+            glEnable(GL_CULL_FACE);
 
             buoyantCalcsShader->BindShader();
 
