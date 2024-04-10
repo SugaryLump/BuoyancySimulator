@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(triangle_strip, max_vertices=9) out;
+layout(triangle_strip, max_vertices=15) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -232,17 +232,16 @@ void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
         downwardsTriangle[1] = triangle[M];
         downwardsTriangle[2] = MN;
     }
-
     trianglesOut[0] = upwardsTriangle;
-    trianglesOut[1] = triangle;
+    trianglesOut[1] = downwardsTriangle;
 }
 
 // Calculates the real buoyancy force point of application for a given submerged
 // triangle with a horizontal base.
-// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT IT'S Y IS HIGHER THAN THE BASE'S!!
+// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT ITS Y IS HIGHER THAN THE BASE'S!!
 vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
     float h = A.y - C.y;
-    float z0 = surfaceDistance(A);
+    float z0 = -surfaceDistance(A);
     float tc;
     if (h == 0) {
         tc = 0.5;
@@ -259,10 +258,10 @@ vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
 
 // Calculates the real buoyancy force point of application for a given
 // submergedtriangle with a horizontal base.
-// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT IT'S Y IS LOWER THAN THE BASE'S!!
+// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT ITS Y IS LOWER THAN THE BASE'S!!
 vec3 downwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
     float h = C.y - A.y;
-    float z0 = surfaceDistance(B);
+    float z0 = -surfaceDistance(B);
     float tc;
     if (h == 0) {
         tc = 0.5;
@@ -285,6 +284,9 @@ float triangleArea(vec3 A, vec3 B, vec3 C) {
 // Calculates the buoyancy force exerted on a triangle composed of these vertices
 vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
     float hCenter = surfaceDistance(tCentroid);
+    if (hCenter > 0) {
+        return vec3(0.0);
+    }
     float force_y = (G * hCenter * WATER_DENSITY * tArea * tNormal).y;
 
     return vec3(0.0, force_y, 0.0);
@@ -440,6 +442,53 @@ void transformAndEmitVertices(vec3[2][3] vertices, vec3 n) {
     
 }
 
+void transformAndEmitVerticesForces(vec3[2][3] vertices, vec3 upForce, vec3 downForce) {
+    for (int i = 0; i < 2; i++) {
+        if (i == 0) {
+            colorIn = vec4(0, 0.4, 1, length(upForce)/length(downForce)/3);
+        }
+        else {
+            colorIn = vec4(1, 0.4, 0, length(downForce)/length(upForce)/3);
+        }
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices, vec3 upPointOfApplication, vec3 downPointOfApplication, vec3 tCentroid) {
+    for (int i = 0; i < 2; i++) {
+        colorIn = vec4(1, 1, 1, 0.5);
+        if (i == 0) {
+            vec3 upcentroid = triangleCentroid(vertices[0][0], vertices[0][1], vertices[0][2]);
+            if (length(upPointOfApplication - upcentroid) > 0.2) {
+                colorIn = vec4(1, 0, 0, 1);
+            }
+        }
+        else {
+            vec3 downcentroid = triangleCentroid(vertices[1][0], vertices[1][1], vertices[1][2]);
+            if (length(downPointOfApplication - downcentroid) > 0.2) {
+                colorIn = vec4(0, 0, 1, 1);
+            }
+        }
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
 
 void transformAndEmitVertices(vec3[9] vertices, int i, bool dummy) {
     float area = triangleArea(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
@@ -467,8 +516,9 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
 
     vec3[2][3] horBaseTriangles;
     horizontalBaseSplit(vec3[3](vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]), horBaseTriangles);
+    //transformAndEmitVertices(horBaseTriangles);
     vec3 upPointOfApplication = upwardTrianglePointOfApplication(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
-    vec3 downPointOfApplication = upwardTrianglePointOfApplication(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    vec3 downPointOfApplication = downwardTrianglePointOfApplication(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
     float upArea = triangleArea(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
     float downArea = triangleArea(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
     vec3 upBuoyancyForce = buoyancyForce(upPointOfApplication, tNormal, upArea);
@@ -482,7 +532,8 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     forcesArray[index] = force;
     torquesArray[index] = torque;
 
-    transformAndEmitVertices(horBaseTriangles);
+    //transformAndEmitVerticesForces(horBaseTriangles, upBuoyancyForce, downBuoyancyForce);
+    transformAndEmitVertices(horBaseTriangles, upPointOfApplication, downPointOfApplication, tCentroid);
     //transformAndEmitVertices(vertices, index, false);
 
     //forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
