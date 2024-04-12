@@ -282,8 +282,8 @@ float triangleArea(vec3 A, vec3 B, vec3 C) {
 }
 
 // Calculates the buoyancy force exerted on a triangle composed of these vertices
-vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
-    float hCenter = surfaceDistance(tCentroid);
+vec3 buoyancyForce(vec3 pointOfApplication, vec3 tNormal, float tArea) {
+    float hCenter = surfaceDistance(pointOfApplication);
     if (hCenter > 0) {
         return vec3(0.0);
     }
@@ -300,31 +300,35 @@ float resistanceCoefficient() {
 }
 
 // Calculates a triangle's velocity
-vec3 triangleVelocity(vec3 tCentroid) {
+vec3 triangleVelocity(vec3 tCentroid, vec3 worldCenterOfMass) {
     vec3 vB = boatVelocities[boatIndex].xyz;
     vec3 oB = boatAngularVelocities[boatIndex].xyz;
-    vec3 rBA = tCentroid - boatPositions[boatIndex].xyz;
+    vec3 rBA = tCentroid - worldCenterOfMass;
     
     return vB + cross(oB, rBA);
 }
 
 // Calculates this triangle's viscous water resistance
-// !!!The original function for this is frankly baffling. Uncountable
+// !!!The original function for this is strange. Uncountable
 // expensive recalculations, completely superfluous operations that mean
 // and achieve absolutely nothing. Literally calculating  the magnitude of
 // a normal vector (which we KNOW is always 1 or 0) and then setting it to 1 anyway
-// in case the normal is 0...
-// Also the original function doesn't seem to respect its own formula,
-// where it's specified that vF needs to be squared and not multiplied by it's
-// length. The paper for this has it like the implementation, so I'm not sure what
-// changed here.
+// in case the normal is 0... However, Kerner's formulas for this also are incorrect
+// (for example, summing a vector and a scalar...)
 // This is pretty modified, but if stuff is wonky, RECHECK HERE 1ST!!!
 vec3 viscousWaterResistance(vec3 tNormal, float tArea, vec3 tVel, float tVelMagnitude, float resC) {
     vec3 vTangent = cross(tNormal, cross(tVel, tNormal));
     float vTangentMagnitude = length(vTangent);
-    float mVel = vTangentMagnitude == 0.0 ? 1.0 : 1.0 / vTangentMagnitude;
-    vec3 tangentialDir = mVel * vTangent;
-    vec3 vF = tVelMagnitude * tangentialDir;
+    if (vTangentMagnitude == 0) {
+        // This triangle's center's velocity is parallel to the its normal
+        // It is moving exactly foward, and I think it's safe to say that
+        // the total resulting viscous water resistance is null, since water
+        // is begin dragged equally in every direction
+        // Lets just throw it away :)
+        return vec3(0.0);
+    }
+    vec3 tangentDirection = -vTangent / vTangentMagnitude;
+    vec3 vF = tVelMagnitude * tangentDirection;
     float vFMagnitude = length(vF);
     
     return 0.5 * WATER_DENSITY * resC * tArea * vFMagnitude * vF;
@@ -504,36 +508,49 @@ void transformAndEmitVertices(vec3[9] vertices, int i, bool dummy) {
 }
 
 void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, int index, float resC, vec3 worldCenterOfMass) {
+    // Whole triangle parameters
     vec3 tNormal = normal(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     vec3 tCentroid = triangleCentroid(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
-    vec3 tVelocity = triangleVelocity(tCentroid);
+    vec3 tVelocity = triangleVelocity(tCentroid, worldCenterOfMass);
     float tVelocityMagnitude = length(tVelocity);
     float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
-    vec3 force;
-    vec3 torque;
+    vec3 upForce = vec3(0.0);
+    vec3 downForce = vec3(0.0);
 
+    // Triangle splitting
     vec3[2][3] horBaseTriangles;
     horizontalBaseSplit(vec3[3](vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]), horBaseTriangles);
-    //transformAndEmitVertices(horBaseTriangles);
     vec3 upPointOfApplication = upwardTrianglePointOfApplication(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
     vec3 downPointOfApplication = downwardTrianglePointOfApplication(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    vec3 upCentroid = triangleCentroid(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
+    vec3 downCentroid = triangleCentroid(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
     float upArea = triangleArea(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
     float downArea = triangleArea(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
-    vec3 upBuoyancyForce = buoyancyForce(upPointOfApplication, tNormal, upArea);
-    vec3 downBuoyancyForce = buoyancyForce(downPointOfApplication, tNormal, downArea);
-    vec3 upBuoyancyTorque = cross(upPointOfApplication - worldCenterOfMass, upBuoyancyForce);
-    vec3 downBuoyancyTorque = cross(downPointOfApplication - worldCenterOfMass, downBuoyancyForce);
+    vec3 upVelocity = triangleVelocity(upCentroid, worldCenterOfMass);
+    vec3 downVelocity = triangleVelocity(downCentroid, worldCenterOfMass);
+    float upVelocityMagnitude = length(upVelocity);
+    float downVelocityMagnitude = length(downVelocity);
 
-    force = upBuoyancyForce + downBuoyancyForce;
-    torque = upBuoyancyTorque + downBuoyancyTorque;
+    // Buoyancy Force
+    upForce += buoyancyForce(upPointOfApplication, tNormal, upArea);
+    downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
 
-    forcesArray[index] = force;
-    torquesArray[index] = torque;
+    // Viscous Water Resistance
+    //upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC, worldCenterOfMass);
+    //downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC, worldCenterOfMass);
+
+    // Torque
+    vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
+    vec3 downTorque = cross(downPointOfApplication - worldCenterOfMass, downForce);
+
+    // Final sum
+    forcesArray[index] = upForce + downForce;
+    torquesArray[index] = upTorque + downTorque;
 
     //transformAndEmitVerticesForces(horBaseTriangles, upBuoyancyForce, downBuoyancyForce);
-    transformAndEmitVertices(horBaseTriangles, upPointOfApplication, downPointOfApplication, tCentroid);
+    //transformAndEmitVertices(horBaseTriangles, upPointOfApplication, downPointOfApplication, tCentroid);
     //transformAndEmitVertices(vertices, index, false);
 
     //forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
@@ -561,7 +578,7 @@ void main() {
     vec3[9] vertices;
 
 
-    // Auxiliary variables to cut down dozens of lines of code
+    // TODO: Optimize this whole algorithm
     vec3[3] baseVerticesAux = {A, B, C};
     float[3] baseDistsAux = {ASurfaceDist, BSurfaceDist, CSurfaceDist};
     // Triangle generation based on how many vertices were submerged
