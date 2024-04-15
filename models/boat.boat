@@ -1,6 +1,6 @@
 modelFile=boat.obj
 mass=7000
-worldPosition=0,-1,0
+worldPosition=0,3,0
 centerOfMass=0,-0.5,-0.5
 volume=1
 inertiaModifier=0.00004

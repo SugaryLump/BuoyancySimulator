@@ -295,9 +295,14 @@ vec3 buoyancyForce(vec3 pointOfApplication, vec3 tNormal, float tArea) {
 // Calculates this boat's resistance coefficient
 float resistanceCoefficient() {
     float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / WATER_VISCOSITY;
+    if (reynoldsNumber == 0) {
+        // Should only happen if velocity is 0
+        return 0;
+    }
     float divisor = pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
     if (divisor == 0) {
-        divisor = 0.00001;
+        // Should be extremely low instead
+        return 0.00001;
     }
 
     return 0.075 / divisor;
@@ -338,34 +343,35 @@ vec3 viscousWaterResistance(vec3 tNormal, float tArea, vec3 tVel, float tVelMagn
     return 0.5 * WATER_DENSITY * resC * tArea * vFMagnitude * vF;
 }
 
-// Calculates this triangle's cos-theta (unsure what this is)
-float triangleCosTheta(vec3 tVel, vec3 tNormal) {
+// Calculates this triangle's cos-theta
+float triangleVelocityNormalCos(vec3 tVel, vec3 tNormal) {
     vec3 normalizedTriangleVelocity = tVel == vec3(0.0) ? tVel : normalize(tVel);
     return dot(normalizedTriangleVelocity, tNormal);
 }
 
 // Calculates this triangle's pressure drag force
-// !!!Again... what was going on here?? More expensive recalculations, more
-// superfluous code that achieves nothing (in this case, literally,
-// *programatically* nothing, even),
-// checking if a power of two is negative...
-// Another suspect to check if stuff is wonky!!!
 vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCosTheta) {
-    float C_D1, C_D2, f_P;
+    float C_D1, C_D2, f_P, speedTerm;
+    int orientation;
 
     // This is like this for rudimentar parametrization
     if (tCosTheta > 0) {
-        C_D1 = 1;
-        C_D2 = 1;
+        C_D1 = 3;
+        C_D2 = 3;
         f_P = 0.5;
+        speedTerm = tVelMagnitude / 0.1;
+        orientation = -1;
     }
     else {
-        C_D1 = 1;
-        C_D2 = 1;
+        C_D1 = 3;
+        C_D2 = 3;
         f_P = 0.5;
+        speedTerm = tVelMagnitude / 0.1;
+        orientation = 1;
+        tCosTheta = -tCosTheta;
     }
-
-    return -(C_D1 * tVelMagnitude +  C_D2 * (tVelMagnitude * tVelMagnitude)) * tArea * pow(tCosTheta, f_P) * tNormal;
+    // return orientation * (C_D1 * speedTerm +  C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P) * tNormal;
+    return orientation * tNormal * (C_D1 * speedTerm + C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P);
 }
 
 // Calculates the slamming force on this triangle
@@ -518,7 +524,6 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     vec3 tVelocity = triangleVelocity(tCentroid, worldCenterOfMass);
     float tVelocityMagnitude = length(tVelocity);
     float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
-    float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
     vec3 upForce = vec3(0.0);
     vec3 downForce = vec3(0.0);
@@ -536,6 +541,8 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     vec3 downVelocity = triangleVelocity(downCentroid, worldCenterOfMass);
     float upVelocityMagnitude = length(upVelocity);
     float downVelocityMagnitude = length(downVelocity);
+    float upCosVelocityNormal = triangleVelocityNormalCos(upVelocity, tNormal);
+    float downCosVelocityNormal = triangleVelocityNormalCos(downVelocity, tNormal);
 
     // Buoyancy Force
     upForce += buoyancyForce(upPointOfApplication, tNormal, upArea);
@@ -544,6 +551,10 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     // Viscous Water Resistance
     upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
     downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
+
+    // Pressure Drago Force
+    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
+    downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
 
     // Torque
     vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
