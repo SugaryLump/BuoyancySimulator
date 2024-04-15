@@ -44,7 +44,7 @@ out vec4 colorIn;
 
 #define G 9.8
 #define WATER_DENSITY 997.0
-#define VISCOSITY_VARIATION 0.000001
+#define WATER_VISCOSITY 0.001
 
 // Returns a texture coordinate by normalizing a 2D vector
 // within x and z [-32, 32]
@@ -294,9 +294,13 @@ vec3 buoyancyForce(vec3 pointOfApplication, vec3 tNormal, float tArea) {
 
 // Calculates this boat's resistance coefficient
 float resistanceCoefficient() {
-    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / VISCOSITY_VARIATION;
+    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / WATER_VISCOSITY;
+    float divisor = pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+    if (divisor == 0) {
+        divisor = 0.00001;
+    }
 
-    return 0.075 / pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+    return 0.075 / divisor;
 }
 
 // Calculates a triangle's velocity
@@ -538,8 +542,8 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
 
     // Viscous Water Resistance
-    //upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC, worldCenterOfMass);
-    //downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC, worldCenterOfMass);
+    upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
+    downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
 
     // Torque
     vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);

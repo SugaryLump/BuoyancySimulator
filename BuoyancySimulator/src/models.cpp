@@ -155,7 +155,7 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
     this->length = std::max(xmax - xmin, zmax - zmin);
     this->volume = volume;
 
-    cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << ")" << endl;
+    cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << "; L = " << this->length << ")" << endl;
 }
 
 mat4 Model::GetTranslationMatrix() {
