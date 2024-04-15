@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(triangle_strip, max_vertices=9) out;
+layout(triangle_strip, max_vertices=15) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -44,7 +44,7 @@ out vec4 colorIn;
 
 #define G 9.8
 #define WATER_DENSITY 997.0
-#define VISCOSITY_VARIATION 0.000001
+#define WATER_VISCOSITY 0.001
 
 // Returns a texture coordinate by normalizing a 2D vector
 // within x and z [-32, 32]
@@ -160,23 +160,6 @@ vec3 applyBoatTransforms(vec4 vertex, mat4 m_model) {
     return vec3(m_model * vertex);
 }
 
-// Transforms an #workingTriangles amount of vertices (must be multiple of 3)
-// in the vertex array transforming them to projection space and then emits
-// the appropriate amount of triangles 
-void transformAndEmitVertices(vec3[9] vertices, int workingTriangles) {
-    for (int i = 0; i < workingTriangles; i++) {
-        for (int v = 0; v < 3; v++) {
-            vec4 vertex = m_vp * vec4(vertices[i * 3 + v], 1.0);
-            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
-            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
-            gl_Position = vertex;
-            EmitVertex();
-        }
-        EndPrimitive();
-    }
-    
-}
-
 // Triangle orientation check
 bool compHand(vec3 A, vec3 B, vec3 C, vec3 H, vec3 M, vec3 L) {
     vec3 V1 = cross(B - A, C - A);
@@ -190,14 +173,120 @@ vec3 triangleCentroid(vec3 A, vec3 B, vec3 C) {
     return (A + B + C) / 3.0;
 }
 
+// Splits the triangle into two triangles with horizontal bases by
+// finding a point along the line defined by highest and lowest
+// vertices and connecting it to the middle point
+// Places apexes of new triangles as the first element of the arrays
+void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
+    // High, Middle, Middle New, Low
+    int H, M, L;
+    vec3 MN;
+
+    H = 0;
+    if (triangle[1].y > triangle[H].y) {
+        M = 0;
+        H = 1;
+    }
+    else {
+        M = 1;
+    }
+
+    if (triangle[2].y > triangle[H].y) {
+        L = M;
+        M = H;
+        H = 2;
+    }
+    else if (triangle[2].y > triangle[M].y) {
+        L = M;
+        M = 2;
+    }
+    else {
+        L = 2;
+    }
+
+    vec3 upwardsTriangle[3];
+    vec3 downwardsTriangle[3];
+
+    // k is the fraction of HL that we can add to H to obtain HM
+    vec3 HL = triangle[L] - triangle[H];
+    float k;
+    if (HL.y == 0) {
+        k = 0.5;
+    }
+    else {
+        k = (triangle[M].y - triangle[H].y) / HL.y;
+    }
+    MN = triangle[H] + HL * k;
+
+    upwardsTriangle[0] = triangle[H];
+    downwardsTriangle[0] = triangle[L];
+    if (M == H + 1 || M == H - 2) {
+        upwardsTriangle[1] = triangle[M];
+        upwardsTriangle[2] = MN;
+        downwardsTriangle[1] = MN;
+        downwardsTriangle[2] = triangle[M];
+    }
+    else {
+        upwardsTriangle[1] = MN;
+        upwardsTriangle[2] = triangle[M];
+        downwardsTriangle[1] = triangle[M];
+        downwardsTriangle[2] = MN;
+    }
+    trianglesOut[0] = upwardsTriangle;
+    trianglesOut[1] = downwardsTriangle;
+}
+
+// Calculates the real buoyancy force point of application for a given submerged
+// triangle with a horizontal base.
+// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT ITS Y IS HIGHER THAN THE BASE'S!!
+vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
+    float h = A.y - C.y;
+    float z0 = -surfaceDistance(A);
+    float tc;
+    if (h == 0) {
+        tc = 0.5;
+    }
+    else {
+        tc = (4 * z0 + 3 * h) / (6 * z0 + 4 * h);
+    }
+
+    vec3 D = (C + B) / 2;
+    vec3 AD = D - A;
+
+    return A + AD * tc;
+}
+
+// Calculates the real buoyancy force point of application for a given
+// submergedtriangle with a horizontal base.
+// ASSUMES THAT THE TRIANGLE'S APEX IS A, AND THAT ITS Y IS LOWER THAN THE BASE'S!!
+vec3 downwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
+    float h = C.y - A.y;
+    float z0 = -surfaceDistance(B);
+    float tc;
+    if (h == 0) {
+        tc = 0.5;
+    }
+    else {
+        tc = (2 * z0 + h) / (6 * z0 + 2 * h);
+    }
+    
+    vec3 D = (C + B) / 2;
+    vec3 DA = A - D;
+
+    return D + DA * tc;
+}
+
 // Calculates the area of a triangle composed of these vertices
 float triangleArea(vec3 A, vec3 B, vec3 C) {
     return length(cross(B - A, C - A)) / 2;
 }
 
 // Calculates the buoyancy force exerted on a triangle composed of these vertices
-vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
-    float hCenter = surfaceDistance(tCentroid);
+vec3 buoyancyForce(vec3 pointOfApplication, vec3 tNormal, float tArea) {
+    float hCenter = surfaceDistance(pointOfApplication);
+    if (hCenter > 0) {
+        return vec3(0.0);
+    }
     float force_y = (G * hCenter * WATER_DENSITY * tArea * tNormal).y;
 
     return vec3(0.0, force_y, 0.0);
@@ -205,37 +294,45 @@ vec3 buoyancyForce(vec3 tCentroid, vec3 tNormal, float tArea) {
 
 // Calculates this boat's resistance coefficient
 float resistanceCoefficient() {
-    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / VISCOSITY_VARIATION;
+    float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / WATER_VISCOSITY;
+    float divisor = pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+    if (divisor == 0) {
+        divisor = 0.00001;
+    }
 
-    return 0.075 / pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+    return 0.075 / divisor;
 }
 
 // Calculates a triangle's velocity
-vec3 triangleVelocity(vec3 tCentroid) {
+vec3 triangleVelocity(vec3 tCentroid, vec3 worldCenterOfMass) {
     vec3 vB = boatVelocities[boatIndex].xyz;
     vec3 oB = boatAngularVelocities[boatIndex].xyz;
-    vec3 rBA = tCentroid - boatPositions[boatIndex].xyz;
+    vec3 rBA = tCentroid - worldCenterOfMass;
     
     return vB + cross(oB, rBA);
 }
 
 // Calculates this triangle's viscous water resistance
-// !!!The original function for this is frankly baffling. Uncountable
+// !!!The original function for this is strange. Uncountable
 // expensive recalculations, completely superfluous operations that mean
 // and achieve absolutely nothing. Literally calculating  the magnitude of
 // a normal vector (which we KNOW is always 1 or 0) and then setting it to 1 anyway
-// in case the normal is 0...
-// Also the original function doesn't seem to respect its own formula,
-// where it's specified that vF needs to be squared and not multiplied by it's
-// length. The paper for this has it like the implementation, so I'm not sure what
-// changed here.
+// in case the normal is 0... However, Kerner's formulas for this also are incorrect
+// (for example, summing a vector and a scalar...)
 // This is pretty modified, but if stuff is wonky, RECHECK HERE 1ST!!!
 vec3 viscousWaterResistance(vec3 tNormal, float tArea, vec3 tVel, float tVelMagnitude, float resC) {
     vec3 vTangent = cross(tNormal, cross(tVel, tNormal));
     float vTangentMagnitude = length(vTangent);
-    float mVel = vTangentMagnitude == 0.0 ? 1.0 : 1.0 / vTangentMagnitude;
-    vec3 tangentialDir = mVel * vTangent;
-    vec3 vF = tVelMagnitude * tangentialDir;
+    if (vTangentMagnitude == 0) {
+        // This triangle's center's velocity is parallel to the its normal
+        // It is moving exactly foward, and I think it's safe to say that
+        // the total resulting viscous water resistance is null, since water
+        // is begin dragged equally in every direction
+        // Lets just throw it away :)
+        return vec3(0.0);
+    }
+    vec3 tangentDirection = -vTangent / vTangentMagnitude;
+    vec3 vF = tVelMagnitude * tangentDirection;
     float vFMagnitude = length(vF);
     
     return 0.5 * WATER_DENSITY * resC * tArea * vFMagnitude * vF;
@@ -281,23 +378,191 @@ vec3 slammingForce(float tArea, float tCosTheta) {
 
     return ((2 * boatMass * (tCosTheta < 0 ? 0 : tArea * tCosTheta)) / boatArea) * boatVelocities[boatIndex].xyz;
 }
+// Transforms an #workingTriangles amount of vertices (must be multiple of 3)
+// in the vertex array transforming them to projection space and then emits
+// the appropriate amount of triangles 
+void transformAndEmitVertices(vec3[9] vertices, int workingTriangles) {
+    for (int i = 0; i < workingTriangles; i++) {
+        vec3 center = triangleCentroid(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
+        colorIn = vec4(surfaceDistance(center), 0.0,0.0,1.0);
+        //colorIn = vec4(1.0, 0.0, 0.0, 1.0);
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * vec4(vertices[i * 3 + v], 1.0);
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices) {
+    for (int i = 0; i < 2; i++) {
+        colorIn = vec4(i, 0.35, 1-i, 1.0);
+        for (int v = 0; v < 3; v++) {
+            //vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0) + (i*2-1) * vec4(0, 0.05, 0, 0));
+            vec4 vertex = m_vp * vec4(vertices[i][v], 1.0);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices, float upArea, float downArea, float tArea) {
+    for (int i = 0; i < 2; i++) {
+        if (i == 0) {
+            colorIn = vec4(upArea/tArea, 0.5, 0.5, 0.8);
+        }
+        else {
+            colorIn = vec4(downArea/tArea, 0.5, 0.5, 0.8);
+        }
+        if (colorIn.x > 1.001) {
+            colorIn = vec4(0, 1, 0 , 1);
+        }
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices, vec3 n) {
+    for (int i = 0; i < 2; i++) {
+        colorIn = abs(vec4(n/2, 1.0));
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVerticesForces(vec3[2][3] vertices, vec3 upForce, vec3 downForce) {
+    for (int i = 0; i < 2; i++) {
+        if (i == 0) {
+            colorIn = vec4(0, 0.4, 1, length(upForce)/length(downForce)/3);
+        }
+        else {
+            colorIn = vec4(1, 0.4, 0, length(downForce)/length(upForce)/3);
+        }
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+void transformAndEmitVertices(vec3[2][3] vertices, vec3 upPointOfApplication, vec3 downPointOfApplication, vec3 tCentroid) {
+    for (int i = 0; i < 2; i++) {
+        colorIn = vec4(1, 1, 1, 0.5);
+        if (i == 0) {
+            vec3 upcentroid = triangleCentroid(vertices[0][0], vertices[0][1], vertices[0][2]);
+            if (length(upPointOfApplication - upcentroid) > 0.2) {
+                colorIn = vec4(1, 0, 0, 1);
+            }
+        }
+        else {
+            vec3 downcentroid = triangleCentroid(vertices[1][0], vertices[1][1], vertices[1][2]);
+            if (length(downPointOfApplication - downcentroid) > 0.2) {
+                colorIn = vec4(0, 0, 1, 1);
+            }
+        }
+        for (int v = 0; v < 3; v++) {
+            vec4 vertex = m_vp * (vec4(vertices[i][v], 1.0) + 0.01 * vec4(normal(vertices[i][0], vertices[i][1], vertices[i][2]), 0.0));
+            //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+            //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+            gl_Position = vertex;
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+}
+
+
+void transformAndEmitVertices(vec3[9] vertices, int i, bool dummy) {
+    float area = triangleArea(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
+    colorIn = vec4(1.0, 1.0, 1.0, 1.0);
+    for (int v = 0; v < 3; v++) {
+        vec4 vertex = m_vp * vec4(vertices[i*3 + v], 1.0);
+        //colorIn = vec4(waveHeightAtPoint(vertices[i * 3 + v].x, vertices[i * 3 + v].z) / waveHeight);
+        //colorIn = vec4(surfaceDistance(vertices[i * 3 + v]) * 10);
+        gl_Position = vertex;
+        EmitVertex();
+    }
+    EndPrimitive();    
+}
 
 void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, int index, float resC, vec3 worldCenterOfMass) {
+    // Whole triangle parameters
     vec3 tNormal = normal(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     vec3 tCentroid = triangleCentroid(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
-    vec3 tVelocity = triangleVelocity(tCentroid);
+    vec3 tVelocity = triangleVelocity(tCentroid, worldCenterOfMass);
     float tVelocityMagnitude = length(tVelocity);
     float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
     float tCosTheta = triangleCosTheta(tVelocity, tNormal);
 
-    forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
-                         //viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
+    vec3 upForce = vec3(0.0);
+    vec3 downForce = vec3(0.0);
+
+    // Triangle splitting
+    vec3[2][3] horBaseTriangles;
+    horizontalBaseSplit(vec3[3](vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]), horBaseTriangles);
+    vec3 upPointOfApplication = upwardTrianglePointOfApplication(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
+    vec3 downPointOfApplication = downwardTrianglePointOfApplication(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    vec3 upCentroid = triangleCentroid(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
+    vec3 downCentroid = triangleCentroid(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    float upArea = triangleArea(horBaseTriangles[0][0], horBaseTriangles[0][1], horBaseTriangles[0][2]);
+    float downArea = triangleArea(horBaseTriangles[1][0], horBaseTriangles[1][1], horBaseTriangles[1][2]);
+    vec3 upVelocity = triangleVelocity(upCentroid, worldCenterOfMass);
+    vec3 downVelocity = triangleVelocity(downCentroid, worldCenterOfMass);
+    float upVelocityMagnitude = length(upVelocity);
+    float downVelocityMagnitude = length(downVelocity);
+
+    // Buoyancy Force
+    upForce += buoyancyForce(upPointOfApplication, tNormal, upArea);
+    downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
+
+    // Viscous Water Resistance
+    upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
+    downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
+
+    // Torque
+    vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
+    vec3 downTorque = cross(downPointOfApplication - worldCenterOfMass, downForce);
+
+    // Final sum
+    forcesArray[index] = upForce + downForce;
+    torquesArray[index] = upTorque + downTorque;
+
+    //transformAndEmitVerticesForces(horBaseTriangles, upBuoyancyForce, downBuoyancyForce);
+    //transformAndEmitVertices(horBaseTriangles, upPointOfApplication, downPointOfApplication, tCentroid);
+    //transformAndEmitVertices(vertices, index, false);
+
+    //forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
+                         //viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC)
                          //pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
                          //slammingForce(tArea, tCosTheta);
 
-    // Using boat position as a center of mass is EXTREMELY sus
-    // Give this a closer look eventually...
-    torquesArray[index] = cross(tCentroid - worldCenterOfMass, forcesArray[index]);
+    //torquesArray[index] = cross(tCentroid - worldCenterOfMass, forcesArray[index]);
 }
 
 void main() {
@@ -317,7 +582,7 @@ void main() {
     vec3[9] vertices;
 
 
-    // Auxiliary variables to cut down dozens of lines of code
+    // TODO: Optimize this whole algorithm
     vec3[3] baseVerticesAux = {A, B, C};
     float[3] baseDistsAux = {ASurfaceDist, BSurfaceDist, CSurfaceDist};
     // Triangle generation based on how many vertices were submerged
@@ -462,16 +727,16 @@ void main() {
         setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 0, resC, worldCenterOfMass);
     }
     // case 1 and 2, where the third generated triangle is always submerged
-    else if (submergedTriangles > 1) {
+    else if (workingTriangles > 1) {
         setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 2, resC, worldCenterOfMass);
 
         // case 2, where the second generated triangle is always submerged
-        if (submergedTriangles == 3) {
+        if (submergedTriangles == 2) {
             setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 1, resC, worldCenterOfMass);
         }
     }
 
-    forces[gl_PrimitiveIDIn * 3] = vec4(forcesAux[0], 0.0);
+    forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 2] = vec4(forcesAux[2], 0.0);
 
@@ -479,5 +744,5 @@ void main() {
     torques[gl_PrimitiveIDIn * 3 + 1] = vec4(torquesAux[1], 0.0);
     torques[gl_PrimitiveIDIn * 3 + 2] = vec4(torquesAux[2], 0.0);
 
-    // transformAndEmitVertices(vertices, workingTriangles);
+    //transformAndEmitVertices(vertices, workingTriangles);
 }
