@@ -299,10 +299,15 @@ float resistanceCoefficient() {
         // Should only happen if velocity is 0
         return 0;
     }
-    float divisor = pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+    // This divisor goes against the formula specified in Kerner's implementation
+    // This is because the formula supplied there behaves very weirdly - close to 0 speed, there is an
+    // extremely sharp spike in the coefficient, which really doesn't make any sense. The result was
+    // that when a boat was begining to settle down, it would hit that spike briefly and get launched
+    // incredibly fast by an unreasonable resistance force.
+    // This function behaves very simillarly to the original, but doesn't have any spikes past v=0
+    float divisor = pow(((log(reynoldsNumber+1) / log(10))), 3.0)/14;
     if (divisor == 0) {
-        // Should be extremely low instead
-        return 0.00001;
+        return 0;
     }
 
     return 0.075 / divisor;
