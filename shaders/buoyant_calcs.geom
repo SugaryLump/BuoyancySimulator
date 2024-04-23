@@ -53,7 +53,7 @@ out vec4 colorIn;
 
 #define G 9.8
 #define WATER_DENSITY 997.0
-#define WATER_VISCOSITY 0.001
+#define WATER_VISCOSITY 0.00109
 
 // Returns a texture coordinate by normalizing a 2D vector
 // within x and z [-32, 32]
