@@ -27,11 +27,20 @@ layout (std430, binding = 8) buffer torquesSSBO {
     vec4 torques[];
 };
 
+layout (std430, binding = 9) buffer boatOldTriangleVelocitiesSSBO {
+    vec4 boatOldTriangleVelocities[];
+};
+
+layout (std430, binding = 10) buffer boatOldSubmergedAreasSSBO {
+    float boatOldSubmergedAreas[];
+};
+
 uniform int boatIndex;
 uniform float boatMass;
 uniform float boatTotalArea;
 uniform float boatLength;
 uniform vec3 boatCenterOfMass;
+uniform uint oldDeltaTime;
 
 uniform float waveHeight;
 uniform sampler2D oceanHeightmap;
@@ -44,7 +53,7 @@ out vec4 colorIn;
 
 #define G 9.8
 #define WATER_DENSITY 997.0
-#define WATER_VISCOSITY 0.001
+#define WATER_VISCOSITY 0.00109
 
 // Returns a texture coordinate by normalizing a 2D vector
 // within x and z [-32, 32]
@@ -156,10 +165,6 @@ vec3 applyBoatTransforms(vec4 vertex) {
     return worldVertex;
 }
 
-vec3 applyBoatTransforms(vec4 vertex, mat4 m_model) {
-    return vec3(m_model * vertex);
-}
-
 // Triangle orientation check
 bool compHand(vec3 A, vec3 B, vec3 C, vec3 H, vec3 M, vec3 L) {
     vec3 V1 = cross(B - A, C - A);
@@ -177,6 +182,8 @@ vec3 triangleCentroid(vec3 A, vec3 B, vec3 C) {
 // finding a point along the line defined by highest and lowest
 // vertices and connecting it to the middle point
 // Places apexes of new triangles as the first element of the arrays
+// The whole sorting algorithm here can be avoided if I just create my triangles
+// right from the get-go. Should be changed eventually...
 void horizontalBaseSplit(vec3[3] triangle, out vec3[2][3] trianglesOut) {
     // High, Middle, Middle New, Low
     int H, M, L;
@@ -295,12 +302,25 @@ vec3 buoyancyForce(vec3 pointOfApplication, vec3 tNormal, float tArea) {
 // Calculates this boat's resistance coefficient
 float resistanceCoefficient() {
     float reynoldsNumber = length(boatVelocities[boatIndex]) * boatLength / WATER_VISCOSITY;
-    float divisor = pow(((log(reynoldsNumber) / log(10)) - 2.0), 2.0);
+    if (reynoldsNumber == 0) {
+        // Should only happen if velocity is 0
+        return 0;
+    }
+    // This divisor goes against the formula specified in Kerner's implementation
+    // This is because the formula supplied there behaves very weirdly - close to 0 speed, there is an
+    // extremely sharp spike in the coefficient, which really doesn't make any sense. The result was
+    // that when a boat was begining to settle down, it would hit that spike briefly and get launched
+    // incredibly fast by an unreasonable resistance force.
+    // This function behaves very simillarly to the original, but doesn't have any spikes past v=0
+    float divisor = pow(((log(reynoldsNumber+1) / log(10))), 3.0)/14;
     if (divisor == 0) {
-        divisor = 0.00001;
+        return 0;
     }
 
-    return 0.075 / divisor;
+    float resistanceCoefficient = 0.075 / divisor;
+
+    // Clamping because this function is wacky
+    return resistanceCoefficient > 10 ? 10 : resistanceCoefficient;
 }
 
 // Calculates a triangle's velocity
@@ -338,38 +358,40 @@ vec3 viscousWaterResistance(vec3 tNormal, float tArea, vec3 tVel, float tVelMagn
     return 0.5 * WATER_DENSITY * resC * tArea * vFMagnitude * vF;
 }
 
-// Calculates this triangle's cos-theta (unsure what this is)
-float triangleCosTheta(vec3 tVel, vec3 tNormal) {
+// Calculates this triangle's cos-theta
+float triangleVelocityNormalCos(vec3 tVel, vec3 tNormal) {
     vec3 normalizedTriangleVelocity = tVel == vec3(0.0) ? tVel : normalize(tVel);
     return dot(normalizedTriangleVelocity, tNormal);
 }
 
 // Calculates this triangle's pressure drag force
-// !!!Again... what was going on here?? More expensive recalculations, more
-// superfluous code that achieves nothing (in this case, literally,
-// *programatically* nothing, even),
-// checking if a power of two is negative...
-// Another suspect to check if stuff is wonky!!!
 vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCosTheta) {
-    float C_D1, C_D2, f_P;
+    float C_D1, C_D2, f_P, speedTerm;
+    int orientation;
 
     // This is like this for rudimentar parametrization
     if (tCosTheta > 0) {
-        C_D1 = 1;
-        C_D2 = 1;
+        C_D1 = 3;
+        C_D2 = 3;
         f_P = 0.5;
+        speedTerm = tVelMagnitude / 0.1;
+        orientation = -1;
     }
     else {
-        C_D1 = 1;
-        C_D2 = 1;
+        C_D1 = 3;
+        C_D2 = 3;
         f_P = 0.5;
+        speedTerm = tVelMagnitude / 0.1;
+        orientation = 1;
+        tCosTheta = -tCosTheta;
     }
-
-    return -(C_D1 * tVelMagnitude +  C_D2 * (tVelMagnitude * tVelMagnitude)) * tArea * pow(tCosTheta, f_P) * tNormal;
+    // return orientation * (C_D1 * speedTerm +  C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P) * tNormal;
+    return orientation * tNormal * (C_D1 * speedTerm + C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P);
 }
 
 // Calculates the slamming force on this triangle
-vec3 slammingForce(float tArea, float tCosTheta) {
+// The original function for this is straight up just using the wrong formula
+/*vec3 slammingForce(float tArea, float tCosTheta) {
     float boatArea = boatTotalArea;
 
     if (boatArea == 0) {
@@ -377,7 +399,8 @@ vec3 slammingForce(float tArea, float tCosTheta) {
     }
 
     return ((2 * boatMass * (tCosTheta < 0 ? 0 : tArea * tCosTheta)) / boatArea) * boatVelocities[boatIndex].xyz;
-}
+}*/
+
 // Transforms an #workingTriangles amount of vertices (must be multiple of 3)
 // in the vertex array transforming them to projection space and then emits
 // the appropriate amount of triangles 
@@ -511,15 +534,52 @@ void transformAndEmitVertices(vec3[9] vertices, int i, bool dummy) {
     EndPrimitive();    
 }
 
-void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, int index, float resC, vec3 worldCenterOfMass) {
-    // Whole triangle parameters
-    vec3 tNormal = normal(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
-    vec3 tCentroid = triangleCentroid(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
-    vec3 tVelocity = triangleVelocity(tCentroid, worldCenterOfMass);
-    float tVelocityMagnitude = length(tVelocity);
-    float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
-    float tCosTheta = triangleCosTheta(tVelocity, tNormal);
+void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float multiplier) {
+    if (multiplier > 0.2) {
+        colorIn = vec4(multiplier, 1-multiplier, 1-multiplier, 1.0);
+        vec4 vertex = m_vp * vec4(A, 1.0);
+        gl_Position = vertex;
+        EmitVertex();
+        vertex = m_vp * vec4(B, 1.0);
+        gl_Position = vertex;
+        EmitVertex();
+        vertex = m_vp * vec4(C, 1.0);
+        gl_Position = vertex;
+        EmitVertex();
+        EndPrimitive();
+    }
+}
 
+void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float subArea, bool dummy) {
+    float tArea = triangleArea(A, B, C);
+    colorIn = vec4(subArea/tArea, 0.0, 0.0 , 1.0);
+    vec4 vertex = m_vp * vec4(A, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    vertex = m_vp * vec4(B, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    vertex = m_vp * vec4(C, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    EndPrimitive();
+}
+
+void transformAndEmitVertices(vec3 A, vec3 B, vec3 C) {
+    colorIn = vec4(1.0, 0.0, 0.0 , 1.0);
+    vec4 vertex = m_vp * vec4(A, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    vertex = m_vp * vec4(B, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    vertex = m_vp * vec4(C, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    EndPrimitive();
+}
+
+void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, vec3 tNormal, int index, float resC, vec3 worldCenterOfMass) {
     vec3 upForce = vec3(0.0);
     vec3 downForce = vec3(0.0);
 
@@ -536,6 +596,8 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     vec3 downVelocity = triangleVelocity(downCentroid, worldCenterOfMass);
     float upVelocityMagnitude = length(upVelocity);
     float downVelocityMagnitude = length(downVelocity);
+    float upCosVelocityNormal = triangleVelocityNormalCos(upVelocity, tNormal);
+    float downCosVelocityNormal = triangleVelocityNormalCos(downVelocity, tNormal);
 
     // Buoyancy Force
     upForce += buoyancyForce(upPointOfApplication, tNormal, upArea);
@@ -545,6 +607,10 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
     downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
 
+    // Pressure Drag Force
+    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
+    downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
+
     // Torque
     vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
     vec3 downTorque = cross(downPointOfApplication - worldCenterOfMass, downForce);
@@ -552,23 +618,46 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     // Final sum
     forcesArray[index] = upForce + downForce;
     torquesArray[index] = upTorque + downTorque;
+}
 
-    //transformAndEmitVerticesForces(horBaseTriangles, upBuoyancyForce, downBuoyancyForce);
-    //transformAndEmitVertices(horBaseTriangles, upPointOfApplication, downPointOfApplication, tCentroid);
-    //transformAndEmitVertices(vertices, index, false);
+void slammingForce(vec3 A, vec3 B, vec3 C, vec3 tNormal, float submergedArea, inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3 worldCenterOfMass) {
+    vec3 tCentroid = triangleCentroid(A, B, C);
+    vec3 tVelocity =  triangleVelocity(tCentroid, worldCenterOfMass);
+    float tVelocityMagnitude = length(tVelocity);
+    float tOldVelocityMagnitude = length(boatOldTriangleVelocities[gl_PrimitiveIDIn].xyz);
+    float tArea = triangleArea(A, B, C);
+    float tCosVelocityNormal = (triangleVelocityNormalCos(tVelocity, tNormal));
+    float oldDeltaTimeSeconds = float(oldDeltaTime) / 1000.0;
+    if (submergedArea == 0 || oldDeltaTimeSeconds == 0 || tVelocityMagnitude <= 0.5 || tCosVelocityNormal <= 0) {
+        boatOldTriangleVelocities[gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
+        boatOldSubmergedAreas[gl_PrimitiveIDIn] = submergedArea;
+        return;
+    }
+    vec3 Fstop = -boatMass * tVelocity * 2 * submergedArea / boatTotalArea;
+    float tOldSubmergedArea = boatOldSubmergedAreas[gl_PrimitiveIDIn];
+    float gamma = (submergedArea * tVelocityMagnitude - tOldSubmergedArea * tOldVelocityMagnitude) / (tArea * oldDeltaTimeSeconds);
+    float gammaMax = tVelocityMagnitude / oldDeltaTimeSeconds;
+    float multiplier = gamma / gammaMax;
+    multiplier = multiplier < 0 ? 0 : (multiplier > 1 ? 1 : multiplier);
+    multiplier = pow(multiplier, 2);
 
-    //forcesArray[index] = buoyancyForce(tCentroid, tNormal, tArea);
-                         //viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC)
-                         //pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosTheta) +
-                         //slammingForce(tArea, tCosTheta);
+    transformAndEmitVertices(A, B, C);
 
-    //torquesArray[index] = cross(tCentroid - worldCenterOfMass, forcesArray[index]);
+    vec3 Fslam = multiplier * tCosVelocityNormal * Fstop;
+
+    forcesArray[0] += Fslam;
+    torquesArray[0] += cross(tCentroid - worldCenterOfMass, Fslam);
+
+    boatOldTriangleVelocities[gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
+    boatOldSubmergedAreas[gl_PrimitiveIDIn] = submergedArea;
 }
 
 void main() {
     vec3 A = applyBoatTransforms(gl_in[0].gl_Position);
     vec3 B = applyBoatTransforms(gl_in[1].gl_Position);
     vec3 C = applyBoatTransforms(gl_in[2].gl_Position);
+
+    vec3 tNormal = normal(A, B, C);
 
     float ASurfaceDist = surfaceDistance(A);
     float BSurfaceDist = surfaceDistance(B);
@@ -588,6 +677,7 @@ void main() {
     // Triangle generation based on how many vertices were submerged
     int totalSubmergedVertices = (AIsSubmerged ? 1 : 0) + (BIsSubmerged ? 1 : 0) + (CIsSubmerged ? 1 : 0);
     int workingTriangles, submergedTriangles;
+    float submergedArea = 0;
     switch (totalSubmergedVertices) {
         case 0: {
             // No submerged triangles
@@ -647,6 +737,7 @@ void main() {
                 vertices[7] = JM;
                 vertices[8] = JH;
             }
+            submergedArea += triangleArea(vertices[6], vertices[7], vertices[8]);
         }
             break;
         case 2: {
@@ -700,6 +791,8 @@ void main() {
                 vertices[7] = IH;
                 vertices[8] = IM;
             }
+            submergedArea += triangleArea(vertices[3], vertices[4], vertices[5]);
+            submergedArea += triangleArea(vertices[6], vertices[7], vertices[8]);
         }
             break;
         case 3: {
@@ -710,6 +803,8 @@ void main() {
             vertices[0] = A;
             vertices[1] = B;
             vertices[2] = C;
+
+            submergedArea += triangleArea(vertices[0], vertices[1], vertices[2]);
         }
             break;
         default: break;
@@ -724,17 +819,19 @@ void main() {
 
     // case 3, where all points of the original triangle are submerged
     if (workingTriangles == 1 && submergedTriangles == 1) {
-        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 0, resC, worldCenterOfMass);
+        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 0, resC, worldCenterOfMass);
     }
     // case 1 and 2, where the third generated triangle is always submerged
     else if (workingTriangles > 1) {
-        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 2, resC, worldCenterOfMass);
+        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 2, resC, worldCenterOfMass);
 
         // case 2, where the second generated triangle is always submerged
         if (submergedTriangles == 2) {
-            setTriangleForceAndTorque(forcesAux, torquesAux, vertices, 1, resC, worldCenterOfMass);
+            setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 1, resC, worldCenterOfMass);
         }
     }
+
+    slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass);
 
     forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);
