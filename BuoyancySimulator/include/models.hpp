@@ -5,6 +5,7 @@
 #include <mat4x4.hpp>
 #include <vec3.hpp>
 #include <memory>
+#include "voxels.hpp"
 
 #pragma once
 
@@ -30,6 +31,13 @@ class Model {
         float volume;
         float length;
 
+        Voxels voxels;
+        shared_ptr<GLuint> voxelsvao;
+        int minIndex;
+        int maxIndex;
+        int totalIndices;
+
+
     public:
         Model() = default;
         Model(string objFilename, float volume = 1, vec3 worldPosition = {0.0, 0.0, 0.0});
@@ -44,4 +52,5 @@ class Model {
         float GetVolume();
         float GetLength();
         void draw();
+        void InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape);
 };

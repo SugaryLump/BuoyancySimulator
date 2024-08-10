@@ -17,4 +17,6 @@ class Voxels {
         void Voxels::VoxelizeVertices(vector<vec3> vertices, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner);
         void Voxels::VoxelizeEdges(vector<vector<vec3>> edges, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner);
         void Voxels::VoxelizePlanes(vec3 planeVertex, vec3 normal, float t, vector<vec3> voxelIndexBounds, vec3 minCorner);
+        vector<vector<vector<bool>>> GetValues();
+        float GetVoxelLength();
 };
