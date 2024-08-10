@@ -25,6 +25,7 @@ class Model {
         int maxIndex;
         int totalIndices;
 
+        vector<vec3> minBoundingBox;
         float totalArea;
         float volume;
         float length;
@@ -38,6 +39,7 @@ class Model {
         void SetScale(vec3 scale);
         void UpdateMatrices();
         int GetTriangleCount();
+        vector<vec3> GetMinBoundingBox();
         float GetTotalArea();
         float GetVolume();
         float GetLength();

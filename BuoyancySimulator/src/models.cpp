@@ -136,9 +136,10 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
 
     // Calculate dimensions
     this->totalArea = 0;
-    float xmin, xmax, zmin, zmax;
+    float xmin, xmax, zmin, zmax, ymin, ymax;
     xmin = xmax = vertices[0];
     zmin = zmax = vertices[2];
+    ymin = ymax = vertices[1];
 
     for (int i = 0; i < shapes[0].mesh.indices.size(); i += 3) {
         vec3 A = vec3(vertices[indices[i] * 8], vertices[indices[i] * 8 + 1], vertices[indices[i] * 8 + 2]);
@@ -150,8 +151,13 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
         xmax = std::max(xmax, std::max(A.x, std::max(B.x, C.x)));
         zmin = std::min(zmin, std::min(A.z, std::min(B.z, C.z)));
         zmax = std::max(zmax, std::max(A.z, std::max(B.z, C.z)));
+        ymin = std::min(ymin, std::min(A.y, std::min(B.y, C.y)));
+        ymax = std::max(ymax, std::max(A.y, std::max(B.y, C.y)));
     }
 
+    this->minBoundingBox = vector<vec3>();
+    this->minBoundingBox.push_back(vec3(xmin, ymin, zmin));
+    this->minBoundingBox.push_back(vec3(xmax, ymax, zmax));
     this->length = std::max(xmax - xmin, zmax - zmin);
     this->volume = volume;
 
