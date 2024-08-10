@@ -9,6 +9,7 @@ set(SOURCES
     src/models.cpp
     src/shader.cpp
     src/buoyant.cpp
+    src/voxels.cpp
 )
 
 # Add executable
