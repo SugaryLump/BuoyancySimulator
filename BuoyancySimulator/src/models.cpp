@@ -161,6 +161,9 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
     this->length = std::max(xmax - xmin, zmax - zmin);
     this->volume = volume;
 
+    // TODO: Clean this up, testing Voxels
+    InitializeVoxelsDebug(attrib, shapes[0]);
+
     cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << "; L = " << this->length << ")" << endl;
 }
 
@@ -209,4 +212,106 @@ void Model::draw() {
     glBindVertexArray(*(this->vao));
     glDrawRangeElements(GL_TRIANGLES, this->minIndex, this->maxIndex, this->totalIndices, GL_UNSIGNED_INT, NULL);
     glBindVertexArray(0);
+}
+
+void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
+    this->voxels = Voxels(0.1, this->minBoundingBox, attrib, shape);
+    auto values = voxels.GetValues();
+    auto voxelLength = voxels.GetVoxelLength();
+
+    // This maps vertex position to vertex index
+    auto index_conversion_map = unordered_map<vec3, GLuint>();
+    // This vector holds our ordered vertex data (VNT)
+    vector<float> vertices = vector<float>();
+    // This array holds the mesh's shape forming indices
+    vector<GLuint> indices = vector<GLuint>();
+    GLuint current_index = 0;
+
+    for (int x = 0; x < values.size(); x++)
+    {
+        for (int y = 0; y < values[0].size(); y++)
+        {
+            for (int z = 0; z < values[0][0].size(); z++)
+            {
+                // TODO - Do this with well known indices like we did for CG
+                vec3 A = vec3(x * voxelLength, y * voxelLength, z * voxelLength);
+                vec3 B = A + vec3(0, 0, voxelLength);
+                vec3 C = B + vec3(voxelLength, 0, 0);
+                vec3 D = C - vec3(0, 0, voxelLength);
+                vec3 E = A + vec3(0, 1, 0);
+                vec3 F = B + vec3(0, 1, 0);
+                vec3 G = C + vec3(0, 1, 0);
+                vec3 H = D + vec3(0, 1, 0);
+                
+                auto emplace_result = index_conversion_map.try_emplace(
+                    A,
+                    current_index
+                );
+
+                // emplace_result.first->second gets our real vertex index
+                indices[current_index]
+                
+                // add our new vertex data if this is a new vertex
+                if (emplace_result.second) {
+                    vertices.push_back(attrib.vertices[3 * idx.vertex_index]);
+                    vertices.push_back(attrib.vertices[3 * idx.vertex_index + 1]);
+                    vertices.push_back(attrib.vertices[3 * idx.vertex_index + 2]);
+                    vertices.push_back(attrib.normals[3 * idx.normal_index]);
+                    vertices.push_back(attrib.normals[3 * idx.normal_index + 1]);
+                    vertices.push_back(attrib.normals[3 * idx.normal_index + 2]);
+                    vertices.push_back(attrib.texcoords[2 * idx.texcoord_index]);
+                    vertices.push_back(attrib.texcoords[2 * idx.texcoord_index + 1]);
+                    current_index++;
+                }
+            }
+        }
+    }
+
+    this->minIndex = 0;
+    this->maxIndex == current_index - 1;
+    this->totalIndices = shapes[0].mesh.indices.size();
+
+    // Generate IBO
+    GLuint ibo, vbo;
+    
+    glGenBuffers(1, &ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, shapes[0].mesh.indices.size() * sizeof(GLuint), indices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    // Generate VBO
+    int n = vertices.size();
+    float vertices_aux[n];
+    for (int i = 0; i < vertices.size(); i++) {
+        // cout << i << "/" << vertices.size() << endl;
+        vertices_aux[i] = vertices[i];
+    }
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), vertices_aux, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // Generate VAO
+    this->vao = make_shared<GLuint>();
+    glGenVertexArrays(1, vao.get());
+    glBindVertexArray(*vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), ((void*)(0)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), ((void*)(sizeof(float)*3)));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), ((void*)(sizeof(float)*6)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    
+    // Unbind buffers
+    glBindVertexArray(0);
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(2);
+	glDisableVertexAttribArray(3);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }

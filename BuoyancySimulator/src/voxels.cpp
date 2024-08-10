@@ -16,7 +16,11 @@ using namespace glm;
 
 // Voxelization algorithm taken from "Reading and voxelization of 3D models, 2013"
 Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
-    this->values = vector<vector<vector<bool>>>();
+    int totalXVoxels = ceil((boundingBox[1].x - boundingBox[0].x) / voxelLength); 
+    int totalYVoxels = ceil((boundingBox[1].y - boundingBox[0].y) / voxelLength);
+    int totalZVoxels = ceil((boundingBox[1].z - boundingBox[0].z) / voxelLength);
+
+    this->values = vector<vector<vector<bool>>>(totalXVoxels, vector<vector<bool>>(totalYVoxels, vector<bool>(totalZVoxels, false)));
     this->voxelLength = voxelLength;
 
     // Voxel's diagonal vector, normalized 
@@ -143,4 +147,12 @@ void Voxels::VoxelizePlanes(vec3 planeVertex, vec3 normal, float t, vector<vec3>
             }
         }
     }
+}
+
+vector<vector<vector<bool>>> Voxels::GetValues() {
+    return this->values;
+}
+
+float Voxels::GetVoxelLength() {
+    return this->voxelLength;
 }
