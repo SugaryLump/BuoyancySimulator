@@ -1,12 +1,6 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 
-#include "main.hpp"
-#include "camera.hpp"
-#include "models.hpp"
-#include "shader.hpp"
-#include "buoyant.hpp"
-
 #include <iostream>
 #include <vec4.hpp>
 #include <memory>
@@ -17,6 +11,15 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#define GLM_ENABLE_EXPERIMENTAL
+
+#include "main.hpp"
+#include "camera.hpp"
+#include "models.hpp"
+#include "shader.hpp"
+#include "buoyant.hpp"
 
 using namespace std;
 using namespace glm;
@@ -44,6 +47,7 @@ shared_ptr<Shader> forcesReductionShader;
 shared_ptr<Shader> torquesReductionShader;
 shared_ptr<Shader> buoyantApplicationShader;
 shared_ptr<Shader> forceVisualizationShader;
+shared_ptr<Shader> cameraShader;
 
 GLuint elapsedTime = 0;
 GLuint frameFrequency = 0;
@@ -167,6 +171,7 @@ void render() {
             glUniform1i(texLocationCalcs, GL_TEXTURE0);
 
             buoyantModels[i]->GetModel().draw();
+
 
             // Run force visualization shader
             glDisable(GL_DEPTH_TEST);
@@ -412,7 +417,7 @@ int main(int argc, char* argv[]) {
     oceanPlane = make_shared<Model>("models/ocean_plane.obj");
     oceanPlane->SetScale(vec3(64, 0, 64));
     if (argc > 1) {
-        buoyantModels.push_back(make_shared<Buoyant>(argv[1]));
+        buoyantModels.push_back(make_shared<Buoyant>(argv[1], true));
     }
     else {
         buoyantModels.push_back(make_shared<Buoyant>());
@@ -426,6 +431,7 @@ int main(int argc, char* argv[]) {
     torquesReductionShader = make_shared<Shader>("shaders/torques_reduction");
     buoyantApplicationShader = make_shared<Shader>("shaders/buoyant_application");
     forceVisualizationShader = make_shared<Shader>("shaders/force_visualization");
+    cameraShader = make_shared<Shader>("shaders/camera");
 
     // Initialize SSBOs
     initSSBOs();

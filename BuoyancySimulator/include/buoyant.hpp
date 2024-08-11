@@ -19,7 +19,7 @@ class Buoyant {
         float inertiaModifier;
 
     public:
-        Buoyant(string boatFileName = "models/boat.boat");
+        Buoyant(string boatFileName = "models/boat.boat", bool debug = false);
         Model GetModel();
         float GetMass();
         float GetInertiaModifier();
