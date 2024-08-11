@@ -4,11 +4,9 @@
 #include "voxels.hpp"
 
 #include <vector>
-#define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 #include <vec3.hpp>
 #include <mat4x4.hpp>
-#define GLM_ENABLE_EXPERIMENTAL
 #include <cmath>
 
 using namespace std;
@@ -36,29 +34,29 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         // Triangle vertices and edges
         vector<vec3> vertices = vector<vec3>();
         vec3 A = vec3(
-            (float)attrib.vertices[idxA.vertex_index],
-            (float)attrib.vertices[idxA.vertex_index + 1],
-            (float)attrib.vertices[idxA.vertex_index + 2]
+            (float)attrib.vertices[idxA.vertex_index * 3 ],
+            (float)attrib.vertices[idxA.vertex_index * 3 + 1],
+            (float)attrib.vertices[idxA.vertex_index * 3 + 2]
         );
         vec3 B = vec3(
-            (float)attrib.vertices[idxB.vertex_index],
-            (float)attrib.vertices[idxB.vertex_index + 1],
-            (float)attrib.vertices[idxB.vertex_index + 2]
+            (float)attrib.vertices[idxB.vertex_index * 3 ],
+            (float)attrib.vertices[idxB.vertex_index * 3 + 1],
+            (float)attrib.vertices[idxB.vertex_index * 3 + 2]
         );
         vec3 C = vec3(
-            (float)attrib.vertices[idxC.vertex_index],
-            (float)attrib.vertices[idxC.vertex_index + 1],
-            (float)attrib.vertices[idxC.vertex_index + 2]
+            (float)attrib.vertices[idxC.vertex_index * 3 ],
+            (float)attrib.vertices[idxC.vertex_index * 3 + 1],
+            (float)attrib.vertices[idxC.vertex_index * 3 + 2]
         );
         vec3 triangleNormal = normalize(vec3(
-            (float)attrib.normals[idxA.normal_index],
-            (float)attrib.normals[idxA.normal_index + 1],
-            (float)attrib.normals[idxA.normal_index + 2]
+            (float)attrib.normals[idxA.normal_index * 3 ],
+            (float)attrib.normals[idxA.normal_index * 3 + 1],
+            (float)attrib.normals[idxA.normal_index * 3 + 2]
         ));
         vertices.push_back(A);
         vertices.push_back(B);
         vertices.push_back(C);
-        vector<vector<vec3>> edges = vector<vector<vec3>>();
+        vector<vector<vec3>> edges = vector<vector<vec3>>(3, vector<vec3>(2, vec3()));
         edges[0][0] = A;
         edges[0][1] = B;
         edges[1][0] = A;
@@ -78,14 +76,14 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         zmax = std::max(A.z, std::max(B.z, C.z));
         ymax = std::max(A.y, std::max(B.y, C.y));
         vec3 minVoxelsIndices = vec3(
-            (int)((xmin - boundingBox[0].x) / voxelLength),
-            (int)((ymin - boundingBox[0].y) / voxelLength),
-            (int)((zmin - boundingBox[0].z) / voxelLength)
+            std::max(0, (int)((xmin - boundingBox[0].x) / voxelLength)),
+            std::max(0, (int)((ymin - boundingBox[0].y) / voxelLength)),
+            std::max(0, (int)((zmin - boundingBox[0].z) / voxelLength))
         );
         vec3 maxVoxelsIndices = vec3(
-            (int)((xmin - boundingBox[0].x) / voxelLength) + 1,
-            (int)((ymin - boundingBox[0].y) / voxelLength) + 1,
-            (int)((zmin - boundingBox[0].z) / voxelLength) + 1
+            std::min((int)((xmax - boundingBox[0].x) / voxelLength) + 1, totalXVoxels - 1),
+            std::min((int)((ymax - boundingBox[0].y) / voxelLength) + 1, totalYVoxels - 1),
+            std::min((int)((zmax - boundingBox[0].z) / voxelLength) + 1, totalZVoxels - 1)
         );
         vector<vec3> voxelIndexBounds = vector<vec3>();
         voxelIndexBounds.push_back(minVoxelsIndices);

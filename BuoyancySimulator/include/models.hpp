@@ -8,7 +8,6 @@
 #include "voxels.hpp"
 
 #pragma once
-
 #define DEFAULT_VOLUME 16.918842
 
 using namespace std;
@@ -32,15 +31,15 @@ class Model {
         float length;
 
         Voxels voxels;
-        shared_ptr<GLuint> voxelsvao;
-        int minIndex;
-        int maxIndex;
-        int totalIndices;
+        shared_ptr<GLuint> voxelDebugvao;
+        int voxelDebugminIndex;
+        int voxelDebugmaxIndex;
+        int voxelDebugtotalIndices;
 
 
     public:
         Model() = default;
-        Model(string objFilename, float volume = 1, vec3 worldPosition = {0.0, 0.0, 0.0});
+        Model(string objFilename, float volume = 1, vec3 worldPosition = {0.0, 0.0, 0.0}, bool voxelsDebug = false);
         mat4 GetTranslationMatrix();
         mat4 GetScaleRotationMatrix();
         mat4 GetModelMatrix();
@@ -52,5 +51,6 @@ class Model {
         float GetVolume();
         float GetLength();
         void draw();
+        void drawVoxelsDebug();
         void InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape);
 };

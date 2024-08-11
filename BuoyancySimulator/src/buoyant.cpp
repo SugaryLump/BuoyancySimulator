@@ -12,7 +12,7 @@
 using namespace glm;
 using namespace std;
 
-Buoyant::Buoyant(string boatFileName) {
+Buoyant::Buoyant(string boatFileName, bool debug) {
     this->mass = DEFAULT_MASS;
     this->centerOfMass = DEFAULT_CENTER_OF_MASS;
     this->inertiaModifier = DEFAULT_INERTIA_MODIFIER;
@@ -75,7 +75,7 @@ Buoyant::Buoyant(string boatFileName) {
     boatFile.close();
     cout << "Done reading " << boatFileName << endl;
 
-    this->model = Model(modelFileName, volume, worldPosition);
+    this->model = Model(modelFileName, volume, worldPosition, debug);
 }
 
 Model Buoyant::GetModel() {

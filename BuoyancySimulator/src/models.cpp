@@ -3,14 +3,14 @@
 
 #include "models.hpp"
 
-#define TINYOBJLOADER_IMPLEMENTATION
+
 #include "tiny_obj_loader.h"
 #include <string>
 #include <iostream>
 #include <unordered_map>
 #include <vec3.hpp>
 #include <mat4x4.hpp>
-#define GLM_ENABLE_EXPERIMENTAL
+
 #include <gtx/hash.hpp>
 #include <vector>
 #include <memory>
@@ -19,7 +19,7 @@
 using namespace std;
 using namespace glm;
 
-Model::Model(string objFilename, float volume, vec3 worldPosition)
+Model::Model(string objFilename, float volume, vec3 worldPosition, bool voxelsDebug)
 {
     // Load .obj
     tinyobj::attrib_t attrib;
@@ -138,8 +138,8 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
     this->totalArea = 0;
     float xmin, xmax, zmin, zmax, ymin, ymax;
     xmin = xmax = vertices[0];
-    zmin = zmax = vertices[2];
     ymin = ymax = vertices[1];
+    zmin = zmax = vertices[2];
 
     for (int i = 0; i < shapes[0].mesh.indices.size(); i += 3) {
         vec3 A = vec3(vertices[indices[i] * 8], vertices[indices[i] * 8 + 1], vertices[indices[i] * 8 + 2]);
@@ -149,10 +149,10 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
 
         xmin = std::min(xmin, std::min(A.x, std::min(B.x, C.x)));
         xmax = std::max(xmax, std::max(A.x, std::max(B.x, C.x)));
-        zmin = std::min(zmin, std::min(A.z, std::min(B.z, C.z)));
-        zmax = std::max(zmax, std::max(A.z, std::max(B.z, C.z)));
         ymin = std::min(ymin, std::min(A.y, std::min(B.y, C.y)));
         ymax = std::max(ymax, std::max(A.y, std::max(B.y, C.y)));
+        zmin = std::min(zmin, std::min(A.z, std::min(B.z, C.z)));
+        zmax = std::max(zmax, std::max(A.z, std::max(B.z, C.z)));
     }
 
     this->minBoundingBox = vector<vec3>();
@@ -161,9 +161,10 @@ Model::Model(string objFilename, float volume, vec3 worldPosition)
     this->length = std::max(xmax - xmin, zmax - zmin);
     this->volume = volume;
 
-    // TODO: Clean this up, testing Voxels
-    InitializeVoxelsDebug(attrib, shapes[0]);
-
+    if (voxelsDebug) {
+        // TODO: Clean this up, testing Voxels
+        InitializeVoxelsDebug(attrib, shapes[0]);
+    }
     cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << "; L = " << this->length << ")" << endl;
 }
 
@@ -222,77 +223,130 @@ void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t sha
     // This maps vertex position to vertex index
     auto index_conversion_map = unordered_map<vec3, GLuint>();
     // This vector holds our ordered vertex data (VNT)
-    vector<float> vertices = vector<float>();
+    vector<vec3> vertices = vector<vec3>();
     // This array holds the mesh's shape forming indices
     vector<GLuint> indices = vector<GLuint>();
     GLuint current_index = 0;
 
-    for (int x = 0; x < values.size(); x++)
-    {
-        for (int y = 0; y < values[0].size(); y++)
-        {
-            for (int z = 0; z < values[0][0].size(); z++)
-            {
-                // TODO - Do this with well known indices like we did for CG
-                vec3 A = vec3(x * voxelLength, y * voxelLength, z * voxelLength);
-                vec3 B = A + vec3(0, 0, voxelLength);
-                vec3 C = B + vec3(voxelLength, 0, 0);
-                vec3 D = C - vec3(0, 0, voxelLength);
-                vec3 E = A + vec3(0, 1, 0);
-                vec3 F = B + vec3(0, 1, 0);
-                vec3 G = C + vec3(0, 1, 0);
-                vec3 H = D + vec3(0, 1, 0);
-                
-                auto emplace_result = index_conversion_map.try_emplace(
-                    A,
-                    current_index
-                );
+    int xdim = values.size();
+    int ydim = values[0].size();
+    int zdim = values[0][0].size();
 
-                // emplace_result.first->second gets our real vertex index
-                indices[current_index]
-                
-                // add our new vertex data if this is a new vertex
-                if (emplace_result.second) {
-                    vertices.push_back(attrib.vertices[3 * idx.vertex_index]);
-                    vertices.push_back(attrib.vertices[3 * idx.vertex_index + 1]);
-                    vertices.push_back(attrib.vertices[3 * idx.vertex_index + 2]);
-                    vertices.push_back(attrib.normals[3 * idx.normal_index]);
-                    vertices.push_back(attrib.normals[3 * idx.normal_index + 1]);
-                    vertices.push_back(attrib.normals[3 * idx.normal_index + 2]);
-                    vertices.push_back(attrib.texcoords[2 * idx.texcoord_index]);
-                    vertices.push_back(attrib.texcoords[2 * idx.texcoord_index + 1]);
-                    current_index++;
-                }
+    // Create vertices
+    for (int x = 0; x <= xdim; x++)
+    {
+        for (int y = 0; y <= ydim; y++)
+        {
+            for (int z = 0; z <= zdim; z++)
+            {
+                vertices.push_back(vec3(x * voxelLength, y * voxelLength, z * voxelLength));
             }
         }
     }
 
-    this->minIndex = 0;
-    this->maxIndex == current_index - 1;
-    this->totalIndices = shapes[0].mesh.indices.size();
+    // Create faces
+    for (int x = 0; x < xdim; x++)
+    {
+        for (int y = 0; y < ydim; y++)
+        {
+            for (int z = 0; z < zdim; z++)
+            {
+                GLuint Aindex = x * (ydim + 1) * (zdim + 1) + y * (zdim + 1) + z;
+                GLuint Bindex = Aindex + 1;
+                GLuint Cindex = Bindex + (ydim + 1) * (zdim + 1);
+                GLuint Dindex = Cindex - 1;
+                GLuint Eindex = Aindex + zdim + 1;
+                GLuint Findex = Bindex + zdim + 1;
+                GLuint Gindex = Cindex + zdim + 1;
+                GLuint Hindex = Dindex + zdim + 1;
+
+                // Bottom
+                indices.push_back(Aindex);
+                indices.push_back(Cindex);
+                indices.push_back(Bindex);
+                indices.push_back(Aindex);
+                indices.push_back(Dindex);
+                indices.push_back(Cindex);
+                // Top
+                indices.push_back(Eindex);
+                indices.push_back(Findex);
+                indices.push_back(Gindex);
+                indices.push_back(Eindex);
+                indices.push_back(Gindex);
+                indices.push_back(Hindex);
+                // Back
+                indices.push_back(Aindex);
+                indices.push_back(Eindex);
+                indices.push_back(Dindex);
+                indices.push_back(Eindex);
+                indices.push_back(Hindex);
+                indices.push_back(Dindex);
+                // Front
+                indices.push_back(Bindex);
+                indices.push_back(Cindex);
+                indices.push_back(Findex);
+                indices.push_back(Cindex);
+                indices.push_back(Gindex);
+                indices.push_back(Findex);
+                // Left
+                indices.push_back(Aindex);
+                indices.push_back(Bindex);
+                indices.push_back(Eindex);
+                indices.push_back(Bindex);
+                indices.push_back(Findex);
+                indices.push_back(Eindex);
+                // Right
+                indices.push_back(Dindex);
+                indices.push_back(Hindex);
+                indices.push_back(Cindex);
+                indices.push_back(Hindex);
+                indices.push_back(Gindex);
+                indices.push_back(Cindex);
+
+            }
+        }
+    }
+
+    this->voxelDebugminIndex = 0;
+    this->voxelDebugmaxIndex == (zdim + 1) * (ydim + 1) * (xdim + 1);
+    this->voxelDebugtotalIndices = indices.size();
+
+    int n_vertices = vertices.size() * 8;
+    float vertices_aux[n_vertices];
+    for (int i = 0; i < vertices.size(); i++) {
+        // cout << i << "/" << vertices.size() << endl;
+        vertices_aux[i*8] = vertices[i].x;
+        vertices_aux[i*8+1] = vertices[i].y;
+        vertices_aux[i*8+2] = vertices[i].z;
+        vertices_aux[i*8+3] = 0;
+        vertices_aux[i*8+4] = 0;
+        vertices_aux[i*8+5] = 0;
+        vertices_aux[i*8+6] = 0;
+        vertices_aux[i*8+7] = 0;
+    }
+    int n_indices = indices.size();
+    float indices_aux[n_indices];
+    for (int i = 0; i < vertices.size(); i++) {
+        // cout << i << "/" << vertices.size() << endl;
+        indices_aux[i] = indices[i];
+    }
 
     // Generate IBO
     GLuint ibo, vbo;
     
     glGenBuffers(1, &ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, shapes[0].mesh.indices.size() * sizeof(GLuint), indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, n_indices * sizeof(GLuint), indices_aux, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // Generate VBO
-    int n = vertices.size();
-    float vertices_aux[n];
-    for (int i = 0; i < vertices.size(); i++) {
-        // cout << i << "/" << vertices.size() << endl;
-        vertices_aux[i] = vertices[i];
-    }
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), vertices_aux, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, n_vertices * sizeof(float), vertices_aux, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     // Generate VAO
-    this->vao = make_shared<GLuint>();
+    this->voxelDebugvao = make_shared<GLuint>();
     glGenVertexArrays(1, vao.get());
     glBindVertexArray(*vao);
 
@@ -314,4 +368,10 @@ void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t sha
 	glDisableVertexAttribArray(3);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void Model::drawVoxelsDebug() {
+    glBindVertexArray(*(this->voxelDebugvao));
+    glDrawRangeElements(GL_TRIANGLES, this->voxelDebugminIndex, this->voxelDebugmaxIndex, this->voxelDebugtotalIndices, GL_UNSIGNED_INT, NULL);
+    glBindVertexArray(0);
 }
