@@ -64,9 +64,9 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         edges[2][0] = B;
         edges[2][1] = C;
         // Cosine of angle between voxel's diagonal and triangle normal
-        float cosAlpha = dot(KNormalized, triangleNormal);
+        float cosAlpha = abs(dot(KNormalized, triangleNormal));
         // Distance from triangle to voxel centers for voxel activation
-        float t = sqrt(3) * (this->voxelLength / 2) * cosAlpha;
+        float t = sqrt(3) * (this->voxelLength / 2.0) * cosAlpha;
         // Triangle bounding box
         float xmin, xmax, ymin, ymax, zmin, zmax;
         xmin = std::min(A.x, std::min(B.x, C.x));
@@ -76,25 +76,25 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         zmax = std::max(A.z, std::max(B.z, C.z));
         ymax = std::max(A.y, std::max(B.y, C.y));
         vec3 minVoxelsIndices = vec3(
-            std::max(0, (int)((xmin - boundingBox[0].x) / voxelLength)),
-            std::max(0, (int)((ymin - boundingBox[0].y) / voxelLength)),
-            std::max(0, (int)((zmin - boundingBox[0].z) / voxelLength))
+            std::max(0, std::min((int)((xmin - boundingBox[0].x) / voxelLength), totalXVoxels - 1)),
+            std::max(0, std::min((int)((ymin - boundingBox[0].y) / voxelLength), totalXVoxels - 1)),
+            std::max(0, std::min((int)((zmin - boundingBox[0].z) / voxelLength), totalXVoxels - 1))
         );
         vec3 maxVoxelsIndices = vec3(
-            std::min((int)((xmax - boundingBox[0].x) / voxelLength) + 1, totalXVoxels - 1),
-            std::min((int)((ymax - boundingBox[0].y) / voxelLength) + 1, totalYVoxels - 1),
-            std::min((int)((zmax - boundingBox[0].z) / voxelLength) + 1, totalZVoxels - 1)
+            std::max(0, std::min((int)((xmax - boundingBox[0].x) / voxelLength), totalXVoxels - 1)),
+            std::max(0, std::min((int)((ymax - boundingBox[0].y) / voxelLength), totalYVoxels - 1)),
+            std::max(0, std::min((int)((zmax - boundingBox[0].z) / voxelLength), totalZVoxels - 1))
         );
         vector<vec3> voxelIndexBounds = vector<vec3>();
         voxelIndexBounds.push_back(minVoxelsIndices);
         voxelIndexBounds.push_back(maxVoxelsIndices);
         
         // Step 1 - Voxelizing Vertices
-        this->VoxelizeVertices(vertices,rC, voxelIndexBounds,boundingBox[0]);
+        // this->VoxelizeVertices(vertices,rC, voxelIndexBounds,boundingBox[0]);
         // Step 2 - Voxelizing Edges
-        this->VoxelizeEdges(edges, rC, voxelIndexBounds, boundingBox[0]);
+        // this->VoxelizeEdges(edges, rC, voxelIndexBounds, boundingBox[0]);
         // Step 3 - Voxelizing Planes
-        this->VoxelizePlanes(A, triangleNormal,t,voxelIndexBounds,boundingBox[0]);
+        this->VoxelizePlanes(vertices, triangleNormal,rC,voxelIndexBounds,boundingBox[0]);
     }
 }
 
@@ -132,14 +132,27 @@ void Voxels::VoxelizeEdges(vector<vector<vec3>> edges, float Rc, vector<vec3> vo
     }
 }
 
-void Voxels::VoxelizePlanes(vec3 planeVertex, vec3 normal, float t, vector<vec3> voxelIndexBounds, vec3 minCorner) {
+void Voxels::VoxelizePlanes(vector<vec3> triangleABC, vec3 normal, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner) {
+    vec3 u = triangleABC[1] - triangleABC[0];
+    vec3 v = triangleABC[2] - triangleABC[0];
+    vec3 n = cross(u, v);
+
+    float dComponent = -(n.x * triangleABC[0].x + n.y * triangleABC[0].y + n.z * triangleABC[0].z); 
     for (int x = voxelIndexBounds[0].x; x <= voxelIndexBounds[1].x; x++) {
         for (int y = voxelIndexBounds[0].y; y <= voxelIndexBounds[1].y; y++) {
             for (int z = voxelIndexBounds[0].z; z <= voxelIndexBounds[1].z; z++) {
                 vec3 voxelCenter = minCorner + vec3(x * this->voxelLength, y * this->voxelLength, z * this->voxelLength) + vec3(this->voxelLength / 2);
-                float dComponent = -(normal.x * planeVertex.x + normal.y * planeVertex.y + normal.z * planeVertex.z); 
-                float d = length(normal.x * voxelCenter.x + normal.y * voxelCenter.y + normal.z * voxelCenter.z + dComponent) / length(normal);
-                if (d <= t) {
+                // check if point is above triangle using its projected baricentric coordinates
+                // reference: W. Heidrich, Journal of Graphics, GPU, and Game Tools,Volume 10, Issue 3, 2005
+                vec3 w = voxelCenter - triangleABC[0];
+                float gamma = dot(cross(u, w), n) / dot(n, n);
+                float beta = dot(cross(w, v), n) / dot(n, n);
+                float alpha = 1 - gamma - beta;
+
+                
+                float d = abs(n.x * voxelCenter.x + n.y * voxelCenter.y + n.z * voxelCenter.z + dComponent) / length(n);
+
+                if (d <= Rc && 0 <= alpha && alpha <= 1 && 0 <= beta && beta <= 1 && 0 <= gamma && gamma <= 1) {
                     this->values[x][y][z] = true;
                 }
             }

@@ -104,8 +104,8 @@ Model::Model(string objFilename, float volume, vec3 worldPosition, bool voxelsDe
 
     // Generate VAO
     this->vao = make_shared<GLuint>();
-    glGenVertexArrays(1, vao.get());
-    glBindVertexArray(*vao);
+    glGenVertexArrays(1, this->vao.get());
+    glBindVertexArray(*(this->vao));
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), ((void*)(0)));
@@ -216,9 +216,9 @@ void Model::draw() {
 }
 
 void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
-    this->voxels = Voxels(0.1, this->minBoundingBox, attrib, shape);
-    auto values = voxels.GetValues();
-    auto voxelLength = voxels.GetVoxelLength();
+    this->voxels = Voxels(0.09, this->minBoundingBox, attrib, shape);
+    auto values = this->voxels.GetValues();
+    auto voxelLength = this->voxels.GetVoxelLength();
 
     // This maps vertex position to vertex index
     auto index_conversion_map = unordered_map<vec3, GLuint>();
@@ -251,64 +251,65 @@ void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t sha
         {
             for (int z = 0; z < zdim; z++)
             {
-                GLuint Aindex = x * (ydim + 1) * (zdim + 1) + y * (zdim + 1) + z;
-                GLuint Bindex = Aindex + 1;
-                GLuint Cindex = Bindex + (ydim + 1) * (zdim + 1);
-                GLuint Dindex = Cindex - 1;
-                GLuint Eindex = Aindex + zdim + 1;
-                GLuint Findex = Bindex + zdim + 1;
-                GLuint Gindex = Cindex + zdim + 1;
-                GLuint Hindex = Dindex + zdim + 1;
+                if (values[x][y][z]) {
+                    GLuint Aindex = x * (ydim + 1) * (zdim + 1) + y * (zdim + 1) + z;
+                    GLuint Bindex = Aindex + 1;
+                    GLuint Cindex = Bindex + (ydim + 1) * (zdim + 1);
+                    GLuint Dindex = Cindex - 1;
+                    GLuint Eindex = Aindex + zdim + 1;
+                    GLuint Findex = Bindex + zdim + 1;
+                    GLuint Gindex = Cindex + zdim + 1;
+                    GLuint Hindex = Dindex + zdim + 1;
 
-                // Bottom
-                indices.push_back(Aindex);
-                indices.push_back(Cindex);
-                indices.push_back(Bindex);
-                indices.push_back(Aindex);
-                indices.push_back(Dindex);
-                indices.push_back(Cindex);
-                // Top
-                indices.push_back(Eindex);
-                indices.push_back(Findex);
-                indices.push_back(Gindex);
-                indices.push_back(Eindex);
-                indices.push_back(Gindex);
-                indices.push_back(Hindex);
-                // Back
-                indices.push_back(Aindex);
-                indices.push_back(Eindex);
-                indices.push_back(Dindex);
-                indices.push_back(Eindex);
-                indices.push_back(Hindex);
-                indices.push_back(Dindex);
-                // Front
-                indices.push_back(Bindex);
-                indices.push_back(Cindex);
-                indices.push_back(Findex);
-                indices.push_back(Cindex);
-                indices.push_back(Gindex);
-                indices.push_back(Findex);
-                // Left
-                indices.push_back(Aindex);
-                indices.push_back(Bindex);
-                indices.push_back(Eindex);
-                indices.push_back(Bindex);
-                indices.push_back(Findex);
-                indices.push_back(Eindex);
-                // Right
-                indices.push_back(Dindex);
-                indices.push_back(Hindex);
-                indices.push_back(Cindex);
-                indices.push_back(Hindex);
-                indices.push_back(Gindex);
-                indices.push_back(Cindex);
-
+                    // Bottom
+                    indices.push_back(Aindex);
+                    indices.push_back(Cindex);
+                    indices.push_back(Bindex);
+                    indices.push_back(Aindex);
+                    indices.push_back(Dindex);
+                    indices.push_back(Cindex);
+                    // Top
+                    indices.push_back(Eindex);
+                    indices.push_back(Findex);
+                    indices.push_back(Gindex);
+                    indices.push_back(Eindex);
+                    indices.push_back(Gindex);
+                    indices.push_back(Hindex);
+                    // Back
+                    indices.push_back(Aindex);
+                    indices.push_back(Eindex);
+                    indices.push_back(Dindex);
+                    indices.push_back(Eindex);
+                    indices.push_back(Hindex);
+                    indices.push_back(Dindex);
+                    // Front
+                    indices.push_back(Bindex);
+                    indices.push_back(Cindex);
+                    indices.push_back(Findex);
+                    indices.push_back(Cindex);
+                    indices.push_back(Gindex);
+                    indices.push_back(Findex);
+                    // Left
+                    indices.push_back(Aindex);
+                    indices.push_back(Bindex);
+                    indices.push_back(Eindex);
+                    indices.push_back(Bindex);
+                    indices.push_back(Findex);
+                    indices.push_back(Eindex);
+                    // Right
+                    indices.push_back(Dindex);
+                    indices.push_back(Hindex);
+                    indices.push_back(Cindex);
+                    indices.push_back(Hindex);
+                    indices.push_back(Gindex);
+                    indices.push_back(Cindex);
+                }
             }
         }
     }
 
     this->voxelDebugminIndex = 0;
-    this->voxelDebugmaxIndex == (zdim + 1) * (ydim + 1) * (xdim + 1);
+    this->voxelDebugmaxIndex == indices.size() - 1;
     this->voxelDebugtotalIndices = indices.size();
 
     int n_vertices = vertices.size() * 8;
@@ -325,8 +326,8 @@ void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t sha
         vertices_aux[i*8+7] = 0;
     }
     int n_indices = indices.size();
-    float indices_aux[n_indices];
-    for (int i = 0; i < vertices.size(); i++) {
+    GLuint indices_aux[n_indices];
+    for (int i = 0; i < indices.size(); i++) {
         // cout << i << "/" << vertices.size() << endl;
         indices_aux[i] = indices[i];
     }
@@ -347,8 +348,8 @@ void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t sha
 
     // Generate VAO
     this->voxelDebugvao = make_shared<GLuint>();
-    glGenVertexArrays(1, vao.get());
-    glBindVertexArray(*vao);
+    glGenVertexArrays(1, this->voxelDebugvao.get());
+    glBindVertexArray(*(this->voxelDebugvao));
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), ((void*)(0)));

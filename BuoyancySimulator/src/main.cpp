@@ -172,6 +172,16 @@ void render() {
 
             buoyantModels[i]->GetModel().draw();
 
+            // Run voxel debug visualization
+            {
+                cameraShader->BindShader();
+                
+                mat4 m_mvpdebug = camera->GetViewProjectionMatrix();
+                GLuint m_mvpdebuglocation = glGetUniformLocation(cameraShader->shaderProgram, "m_mvp");
+                glUniformMatrix4fv(m_mvpdebuglocation, 1, GL_FALSE, value_ptr(m_mvpdebug));
+                
+                buoyantModels[i]->GetModel().drawVoxelsDebug();
+            }
 
             // Run force visualization shader
             glDisable(GL_DEPTH_TEST);
