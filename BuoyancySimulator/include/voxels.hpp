@@ -19,7 +19,7 @@ class Voxels {
         Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t attrib, tinyobj::shape_t shape);
         void VoxelizeVertices(vector<vec3> vertices, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner);
         void VoxelizeEdges(vector<vector<vec3>> edges, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner);
-        void VoxelizePlanes(vec3 planeVertex, vec3 normal, float t, vector<vec3> voxelIndexBounds, vec3 minCorner);
+        void VoxelizePlanes(vector<vec3> triangleABC, vec3 normal, float t, vector<vec3> voxelIndexBounds, vec3 minCorner);
         vector<vector<vector<bool>>> GetValues();
         float GetVoxelLength();
 };
