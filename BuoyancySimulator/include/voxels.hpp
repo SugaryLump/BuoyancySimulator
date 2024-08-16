@@ -13,6 +13,7 @@ using namespace glm;
 class Voxels {
     private:
         vector<vector<vector<bool>>> values;
+        vector<vector<vector<vector<vec3>>>> normals;
         float voxelLength;
     public:
         Voxels() = default;
@@ -20,6 +21,8 @@ class Voxels {
         void VoxelizeVertices(vector<vec3> vertices, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner);
         void VoxelizeEdges(vector<vector<vec3>> edges, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner);
         void VoxelizePlanes(vector<vec3> triangleABC, vec3 normal, float t, vector<vec3> voxelIndexBounds, vec3 minCorner);
+        void FillVolume();
+        void ExpandVolume (int x, int y, int z, int xdir, int ydir, int zdir);
         vector<vector<vector<bool>>> GetValues();
         float GetVoxelLength();
 };

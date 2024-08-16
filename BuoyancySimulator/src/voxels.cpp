@@ -9,8 +9,12 @@
 #include <mat4x4.hpp>
 #include <cmath>
 
+#define sgn(x) = 
+
 using namespace std;
 using namespace glm;
+
+#define sgn(x) (x > 0) - (x < 0)
 
 // Voxelization algorithm taken from "Reading and voxelization of 3D models, 2013"
 Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
@@ -19,6 +23,7 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
     int totalZVoxels = ceil((boundingBox[1].z - boundingBox[0].z) / voxelLength);
 
     this->values = vector<vector<vector<bool>>>(totalXVoxels, vector<vector<bool>>(totalYVoxels, vector<bool>(totalZVoxels, false)));
+    this->normals = vector<vector<vector<vector<vec3>>>>(totalXVoxels, vector<vector<vector<vec3>>>(totalYVoxels, vector<vector<vec3>>(totalZVoxels, vector<vec3>())));
     this->voxelLength = voxelLength;
 
     // Voxel's diagonal vector, normalized 
@@ -95,6 +100,7 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         // this->VoxelizeEdges(edges, rC, voxelIndexBounds, boundingBox[0]);
         // Step 3 - Voxelizing Planes
         this->VoxelizePlanes(vertices, triangleNormal,rC,voxelIndexBounds,boundingBox[0]);
+        this->FillVolume();
     }
 }
 
@@ -154,9 +160,79 @@ void Voxels::VoxelizePlanes(vector<vec3> triangleABC, vec3 normal, float Rc, vec
 
                 if (d <= Rc && 0 <= alpha && alpha <= 1 && 0 <= beta && beta <= 1 && 0 <= gamma && gamma <= 1) {
                     this->values[x][y][z] = true;
+                    this->normals[x][y][z].push_back(normal);
                 }
             }
         }
+    }
+}
+
+void Voxels::FillVolume() {
+    for (int x = 0; x < this->values.size(); x++) {
+        for (int y = 0; y < this->values[x].size(); y++) {
+            for (int z = 0; z < this->values[x][y].size(); z++) {
+                int xdir = sgn(this->normals[x][y][z][0].x);
+                int ydir = sgn(this->normals[x][y][z][0].y);
+                int zdir = sgn(this->normals[x][y][z][0].z);
+                for (int i = 1; i < this->normals[x][y][z].size(); i++) {
+                    if (sgn(xdir) == sgn(this->normals[x][y][z][i].x)) {
+                        xdir = sgn(this->normals[x][y][z][i].x);
+                    }
+                    else {
+                        xdir = 0;
+                    }
+                    if (sgn(ydir) == sgn(this->normals[y][y][z][i].y)) {
+                        ydir = sgn(this->normals[y][y][z][i].y);
+                    }
+                    else {
+                        ydir = 0;
+                    }
+                    if (sgn(zdir) == sgn(this->normals[z][y][z][i].z)) {
+                        zdir = sgn(this->normals[z][y][z][i].z);
+                    }
+                    else {
+                        zdir = 0;
+                    }
+                }
+                this->ExpandVolume(x, y, z, xdir, ydir, zdir);
+            }
+        }
+    }
+}
+
+void Voxels::ExpandVolume(int x, int y, int z, int xdir, int ydir, int zdir) {
+    this->values[x][y][z] = true;
+    for(int i = 0; i < this->normals[x][y][z].size(); i++) {
+        if (xdir != sgn(this->normals[x][y][z][i].x)) {
+            xdir = 0;
+        }
+        if (ydir != sgn(this->normals[x][y][z][i].y)) {
+            ydir = 0;
+        }
+        if (zdir != sgn(this->normals[x][y][z][i].z)) {
+            zdir = 0;
+        }
+    }
+    if (xdir != 0) {
+        this->ExpandVolume(x+xdir, y, z, xdir, ydir, zdir);
+        if (ydir != 0) {
+            this->ExpandVolume(x+xdir, y+ydir, z, xdir, ydir, zdir);
+            if (zdir != 0) {
+                this->ExpandVolume(x+xdir, y+ydir, z+zdir, xdir, ydir, zdir);
+            }
+        }
+        if (zdir != 0) {
+            this->ExpandVolume(x+xdir, y, z+zdir, xdir, ydir, zdir);
+        }
+    }
+    if (ydir != 0) {
+        this->ExpandVolume(x, y+ydir, z, xdir, ydir, zdir);
+        if (zdir != 0) {
+            this->ExpandVolume(x, y+ydir, z+zdir, xdir, ydir, zdir);
+        }
+    }
+    if (zdir != 0) {
+        this->ExpandVolume(x, y, z+zdir, xdir, ydir, zdir);
     }
 }
 
