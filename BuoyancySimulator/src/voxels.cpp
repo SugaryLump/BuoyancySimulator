@@ -8,6 +8,8 @@
 #include <vec3.hpp>
 #include <mat4x4.hpp>
 #include <cmath>
+#include <string>
+#include <iostream>
 
 #define sgn(x) = 
 
@@ -100,8 +102,8 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         // this->VoxelizeEdges(edges, rC, voxelIndexBounds, boundingBox[0]);
         // Step 3 - Voxelizing Planes
         this->VoxelizePlanes(vertices, triangleNormal,rC,voxelIndexBounds,boundingBox[0]);
-        this->FillVolume();
     }
+    this->FillVolume();
 }
 
 void Voxels::VoxelizeVertices(vector<vec3> vertices, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner) {
@@ -168,71 +170,85 @@ void Voxels::VoxelizePlanes(vector<vec3> triangleABC, vec3 normal, float Rc, vec
 }
 
 void Voxels::FillVolume() {
-    for (int x = 0; x < this->values.size(); x++) {
-        for (int y = 0; y < this->values[x].size(); y++) {
-            for (int z = 0; z < this->values[x][y].size(); z++) {
-                int xdir = sgn(this->normals[x][y][z][0].x);
-                int ydir = sgn(this->normals[x][y][z][0].y);
-                int zdir = sgn(this->normals[x][y][z][0].z);
-                for (int i = 1; i < this->normals[x][y][z].size(); i++) {
-                    if (sgn(xdir) == sgn(this->normals[x][y][z][i].x)) {
-                        xdir = sgn(this->normals[x][y][z][i].x);
+    auto startingValues = vector<vector<vector<bool>>>(this->values.size(), vector<vector<bool>>(this->values[0].size(), vector<bool>(this->values[0][0].size(), false)));
+    for (int x = 0; x < startingValues.size(); x++) {
+        for (int y = 0; y < startingValues[x].size(); y++) {
+            for (int z = 0; z < startingValues[x][y].size(); z++) {
+                startingValues[x][y][z] = bool(this->values[x][y][z]);
+            }
+        }
+    }
+    for (int x = 0; x < startingValues.size(); x++) {
+        for (int y = 0; y < startingValues[x].size(); y++) {
+            for (int z = 0; z < startingValues[x][y].size(); z++) {
+                if (startingValues[x][y][z]) {
+                    int xdir = sgn(this->normals[x][y][z][0].x);
+                    int ydir = sgn(this->normals[x][y][z][0].y);
+                    int zdir = sgn(this->normals[x][y][z][0].z);
+                    for (int i = 1; i < this->normals[x][y][z].size(); i++) {
+                        if (sgn(xdir) == sgn(this->normals[x][y][z][i].x)) {
+                            xdir = sgn(this->normals[x][y][z][i].x);
+                        }
+                        else {
+                            xdir = 0;
+                        }
+                        if (sgn(ydir) == sgn(this->normals[y][y][z][i].y)) {
+                            ydir = sgn(this->normals[y][y][z][i].y);
+                        }
+                        else {
+                            ydir = 0;
+                        }
+                        if (sgn(zdir) == sgn(this->normals[z][y][z][i].z)) {
+                            zdir = sgn(this->normals[z][y][z][i].z);
+                        }
+                        else {
+                            zdir = 0;
+                        }
                     }
-                    else {
-                        xdir = 0;
-                    }
-                    if (sgn(ydir) == sgn(this->normals[y][y][z][i].y)) {
-                        ydir = sgn(this->normals[y][y][z][i].y);
-                    }
-                    else {
-                        ydir = 0;
-                    }
-                    if (sgn(zdir) == sgn(this->normals[z][y][z][i].z)) {
-                        zdir = sgn(this->normals[z][y][z][i].z);
-                    }
-                    else {
-                        zdir = 0;
-                    }
+                    cout << "new\n";
+                    this->ExpandVolume(x, y, z, xdir, ydir, zdir);
                 }
-                this->ExpandVolume(x, y, z, xdir, ydir, zdir);
             }
         }
     }
 }
 
 void Voxels::ExpandVolume(int x, int y, int z, int xdir, int ydir, int zdir) {
-    this->values[x][y][z] = true;
-    for(int i = 0; i < this->normals[x][y][z].size(); i++) {
-        if (xdir != sgn(this->normals[x][y][z][i].x)) {
-            xdir = 0;
+    if (x < this->values.size() && y < this->values[0].size() && z < this->values[0][0].size()) { 
+        cout << x << ", " << y << ", " << z << "\n";
+        this->values[x][y][z] = true;
+        for(int i = 0; i < this->normals[x][y][z].size(); i++) {
+            if (xdir != sgn(this->normals[x][y][z][i].x)) {
+                xdir = 0;
+            }
+            if (ydir != sgn(this->normals[x][y][z][i].y)) {
+                ydir = 0;
+            }
+            if (zdir != sgn(this->normals[x][y][z][i].z)) {
+                zdir = 0;
+            }
         }
-        if (ydir != sgn(this->normals[x][y][z][i].y)) {
-            ydir = 0;
-        }
-        if (zdir != sgn(this->normals[x][y][z][i].z)) {
-            zdir = 0;
-        }
-    }
-    if (xdir != 0) {
-        this->ExpandVolume(x+xdir, y, z, xdir, ydir, zdir);
-        if (ydir != 0) {
-            this->ExpandVolume(x+xdir, y+ydir, z, xdir, ydir, zdir);
+        if (xdir != 0) {
+            this->ExpandVolume(x+xdir, y, z, xdir, ydir, zdir);
+            if (ydir != 0) {
+                this->ExpandVolume(x+xdir, y+ydir, z, xdir, ydir, zdir);
+                if (zdir != 0) {
+                    this->ExpandVolume(x+xdir, y+ydir, z+zdir, xdir, ydir, zdir);
+                }
+            }
             if (zdir != 0) {
-                this->ExpandVolume(x+xdir, y+ydir, z+zdir, xdir, ydir, zdir);
+                this->ExpandVolume(x+xdir, y, z+zdir, xdir, ydir, zdir);
+            }
+        }
+        if (ydir != 0) {
+            this->ExpandVolume(x, y+ydir, z, xdir, ydir, zdir);
+            if (zdir != 0) {
+                this->ExpandVolume(x, y+ydir, z+zdir, xdir, ydir, zdir);
             }
         }
         if (zdir != 0) {
-            this->ExpandVolume(x+xdir, y, z+zdir, xdir, ydir, zdir);
+            this->ExpandVolume(x, y, z+zdir, xdir, ydir, zdir);
         }
-    }
-    if (ydir != 0) {
-        this->ExpandVolume(x, y+ydir, z, xdir, ydir, zdir);
-        if (zdir != 0) {
-            this->ExpandVolume(x, y+ydir, z+zdir, xdir, ydir, zdir);
-        }
-    }
-    if (zdir != 0) {
-        this->ExpandVolume(x, y, z+zdir, xdir, ydir, zdir);
     }
 }
 
