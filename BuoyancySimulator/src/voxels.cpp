@@ -10,8 +10,7 @@
 #include <cmath>
 #include <string>
 #include <iostream>
-
-#define sgn(x) = 
+#include <random>
 
 using namespace std;
 using namespace glm;
@@ -25,6 +24,7 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
     int totalZVoxels = ceil((boundingBox[1].z - boundingBox[0].z) / voxelLength);
 
     this->values = vector<vector<vector<bool>>>(totalXVoxels, vector<vector<bool>>(totalYVoxels, vector<bool>(totalZVoxels, false)));
+    this->valuesVisited = vector<vector<vector<bool>>>(totalXVoxels, vector<vector<bool>>(totalYVoxels, vector<bool>(totalZVoxels, false)));
     this->normals = vector<vector<vector<vector<vec3>>>>(totalXVoxels, vector<vector<vector<vec3>>>(totalYVoxels, vector<vector<vec3>>(totalZVoxels, vector<vec3>())));
     this->voxelLength = voxelLength;
 
@@ -101,9 +101,10 @@ Voxels::Voxels(float voxelLength, vector<vec3> boundingBox, tinyobj::attrib_t at
         // Step 2 - Voxelizing Edges
         // this->VoxelizeEdges(edges, rC, voxelIndexBounds, boundingBox[0]);
         // Step 3 - Voxelizing Planes
-        this->VoxelizePlanes(vertices, triangleNormal,rC,voxelIndexBounds,boundingBox[0]);
+        //this->VoxelizePlanes(vertices, triangleNormal,rC,voxelIndexBounds,boundingBox[0]);
     }
-    this->FillVolume();
+    srand((unsigned int)time(NULL));
+    this->FillVolume(boundingBox[0], attrib, shape);
 }
 
 void Voxels::VoxelizeVertices(vector<vec3> vertices, float Rc, vector<vec3> voxelIndexBounds, vec3 minCorner) {
@@ -169,7 +170,7 @@ void Voxels::VoxelizePlanes(vector<vec3> triangleABC, vec3 normal, float Rc, vec
     }
 }
 
-void Voxels::FillVolume() {
+/*void Voxels::FillVolume() {
     auto startingValues = vector<vector<vector<bool>>>(this->values.size(), vector<vector<bool>>(this->values[0].size(), vector<bool>(this->values[0][0].size(), false)));
     for (int x = 0; x < startingValues.size(); x++) {
         for (int y = 0; y < startingValues[x].size(); y++) {
@@ -192,14 +193,14 @@ void Voxels::FillVolume() {
                         else {
                             xdir = 0;
                         }
-                        if (sgn(ydir) == sgn(this->normals[y][y][z][i].y)) {
-                            ydir = sgn(this->normals[y][y][z][i].y);
+                        if (sgn(ydir) == sgn(this->normals[x][y][z][i].y)) {
+                            ydir = sgn(this->normals[x][y][z][i].y);
                         }
                         else {
                             ydir = 0;
                         }
-                        if (sgn(zdir) == sgn(this->normals[z][y][z][i].z)) {
-                            zdir = sgn(this->normals[z][y][z][i].z);
+                        if (sgn(zdir) == sgn(this->normals[x][y][z][i].z)) {
+                            zdir = sgn(this->normals[x][y][z][i].z);
                         }
                         else {
                             zdir = 0;
@@ -214,8 +215,9 @@ void Voxels::FillVolume() {
 }
 
 void Voxels::ExpandVolume(int x, int y, int z, int xdir, int ydir, int zdir) {
-    if (x < this->values.size() && y < this->values[0].size() && z < this->values[0][0].size()) { 
+    if (x < this->values.size() && y < this->values[0].size() && z < this->values[0][0].size() && !this->valuesVisited[x][y][z]) { 
         cout << x << ", " << y << ", " << z << "\n";
+        this->valuesVisited[x][y][z] = true;
         this->values[x][y][z] = true;
         for(int i = 0; i < this->normals[x][y][z].size(); i++) {
             if (xdir != sgn(this->normals[x][y][z][i].x)) {
@@ -248,6 +250,78 @@ void Voxels::ExpandVolume(int x, int y, int z, int xdir, int ydir, int zdir) {
         }
         if (zdir != 0) {
             this->ExpandVolume(x, y, z+zdir, xdir, ydir, zdir);
+        }
+    }
+}*/
+
+void Voxels::FillVolume(vec3 minCorner, tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
+    std::random_device rd;
+    std:mt19937 e2(rd());
+    std::uniform_real_distribution<> phiDist(0, 2*M_PI);
+    std::uniform_real_distribution<> costhetaDist(-1, 1);
+
+    // Intersection algorithm from https://courses.cs.washington.edu/courses/csep557/10au/lectures/triangle_intersection.pdf
+    for (int x = 0; x < this->values.size(); x++) {
+        for (int y = 0; y < this->values[x].size(); y++) {
+            for (int z = 0; z < this->values[x][y].size(); z++) {
+                cout << "Voxel: " << x << ", " << y << ", " << z << endl;
+                vec3 voxelCenter = minCorner + vec3(x * this->voxelLength, y * this->voxelLength, z * this->voxelLength) + vec3(this->voxelLength / 2);
+                float shortestDist = -1;
+                vec3 closestTriangleNormal;
+                vec3 closestTriangleRay;
+                for (int i = 0; i < 5; i++) {
+                    float costheta = costhetaDist(e2);
+                    float phi = phiDist(e2);
+                    float theta = acos(costheta);
+                    float dir_x = sin(theta) * cos(phi);
+                    float dir_y = sin(theta) * sin(phi);
+                    float dir_z = cos(theta);
+                    vec3 dir = vec3(dir_x, dir_y, dir_z);
+                    for (int i = 0; i + 2 < shape.mesh.indices.size(); i += 3) {
+                        tinyobj::index_t idxA = shape.mesh.indices[i];
+                        tinyobj::index_t idxB = shape.mesh.indices[i + 1];
+                        tinyobj::index_t idxC = shape.mesh.indices[i + 2];
+
+                        // Triangle vertices and edges
+                        vec3 A = vec3(
+                            (float)attrib.vertices[idxA.vertex_index * 3 ],
+                            (float)attrib.vertices[idxA.vertex_index * 3 + 1],
+                            (float)attrib.vertices[idxA.vertex_index * 3 + 2]
+                        );
+                        vec3 B = vec3(
+                            (float)attrib.vertices[idxB.vertex_index * 3 ],
+                            (float)attrib.vertices[idxB.vertex_index * 3 + 1],
+                            (float)attrib.vertices[idxB.vertex_index * 3 + 2]
+                        );
+                        vec3 C = vec3(
+                            (float)attrib.vertices[idxC.vertex_index * 3 ],
+                            (float)attrib.vertices[idxC.vertex_index * 3 + 1],
+                            (float)attrib.vertices[idxC.vertex_index * 3 + 2]
+                        );
+                        vec3 triangleNormal = normalize(vec3(
+                            (float)attrib.normals[idxA.normal_index * 3 ],
+                            (float)attrib.normals[idxA.normal_index * 3 + 1],
+                            (float)attrib.normals[idxA.normal_index * 3 + 2]
+                        ));
+                        vec3 n = triangleNormal;
+                        float dComponent = dot(n, A);
+                        float t = (dComponent - dot(n, voxelCenter)) / (dot(n, dir));
+                        vec3 Q = voxelCenter + t * dir;
+
+                        if (abs(t) < shortestDist || shortestDist == -1) {
+                            if (dot(cross((B - A), (Q - A)), n) >= 0 && dot(cross((C - B), (Q - B)), n) >= 0 && dot(cross((A - C), (Q - C)), n) >= 0) {
+                                shortestDist = abs(t);
+                                closestTriangleNormal = n;
+                                closestTriangleRay = dir * sign(t);
+                            }
+                        }
+                    }
+                }
+                
+                if (shortestDist != -1 && dot(closestTriangleNormal, closestTriangleRay) > 0) {
+                    this->values[x][y][z] = true;
+                }
+            }
         }
     }
 }
