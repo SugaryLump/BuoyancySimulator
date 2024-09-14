@@ -50,7 +50,9 @@ class Model {
         float GetTotalArea();
         float GetVolume();
         float GetLength();
+        void SetVolume(float volume);
         void draw();
         void drawVoxelsDebug();
+        Voxels GenerateVoxels(tinyobj::attrib_t attrib, tinyobj::shape_t shape);
         void InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape);
 };
