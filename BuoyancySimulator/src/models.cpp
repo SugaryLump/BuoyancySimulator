@@ -162,7 +162,6 @@ Model::Model(string objFilename, float volume, vec3 worldPosition, bool voxelsDe
     this->volume = volume;
 
     if (voxelsDebug) {
-        // TODO: Clean this up, testing Voxels
         InitializeVoxelsDebug(attrib, shapes[0]);
     }
     cout << "Finished calculating " << objFilename << " dimensions (A = " << this->totalArea << "; V = " << this->volume << "; L = " << this->length << ")" << endl;
@@ -205,6 +204,10 @@ float Model::GetVolume() {
     return this->volume;
 }
 
+void Model::SetVolume(float volume) {
+    this->volume = volume;
+}
+
 float Model::GetLength() {
     return this->length;
 }
@@ -213,6 +216,17 @@ void Model::draw() {
     glBindVertexArray(*(this->vao));
     glDrawRangeElements(GL_TRIANGLES, this->minIndex, this->maxIndex, this->totalIndices, GL_UNSIGNED_INT, NULL);
     glBindVertexArray(0);
+}
+
+Voxels Model::GenerateVoxels(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
+    float maxDist = std::max(
+        std::max(
+            this->minBoundingBox[1].x - this->minBoundingBox[0].x,
+            this->minBoundingBox[1].y - this->minBoundingBox[0].y
+            ),
+        this->minBoundingBox[1].z - this->minBoundingBox[0].z
+    );
+    return Voxels(15/maxDist, this->minBoundingBox, attrib, shape);
 }
 
 void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {

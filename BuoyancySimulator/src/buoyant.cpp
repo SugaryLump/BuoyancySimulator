@@ -1,6 +1,7 @@
 #include "buoyant.hpp"
 
 #include "models.hpp"
+#include "voxels.hpp"
 
 #include <string>
 #include <iostream>
@@ -23,6 +24,8 @@ Buoyant::Buoyant(string boatFileName, bool debug) {
     ifstream boatFile;
     boatFile.open(boatFileName);
     string entry;
+
+    bool automateParams = false;
 
     cout << "Reading " << boatFileName << endl;
     while (getline(boatFile, entry)) {
@@ -71,11 +74,26 @@ Buoyant::Buoyant(string boatFileName, bool debug) {
             this->inertiaModifier = stof(value);
             cout << "inertiaModifier" << this->inertiaModifier << endl;
         }
+        else if (key.compare("automateParams") == 0) {
+            automateParams = true;
+        }
     }
     boatFile.close();
     cout << "Done reading " << boatFileName << endl;
 
     this->model = Model(modelFileName, volume, worldPosition, debug);
+    if (automateParams) {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+
+        string err;
+
+        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, modelFileName.c_str());
+        Voxels voxels = this->model.GenerateVoxels(attrib, shapes[0]);
+        this->centerOfMass = voxels.GetAveragePosition();
+        this->model.SetVolume(voxels.GetVolume());
+    }
 }
 
 Model Buoyant::GetModel() {
