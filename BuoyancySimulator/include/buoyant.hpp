@@ -7,7 +7,7 @@
 #pragma once
 #define DEFAULT_MASS 400
 #define DEFAULT_CENTER_OF_MASS vec3(0.0)
-#define DEFAULT_INERTIA_MODIFIER 0.03614264953
+#define DEFAULT_INERTIA_MODIFIER mat3(0.03614264953);
 
 using namespace glm;
 
@@ -16,12 +16,12 @@ class Buoyant {
         Model model;
         float mass;
         vec3 centerOfMass;
-        float inertiaModifier;
+        mat3 inertiaModifier;
 
     public:
         Buoyant(string boatFileName = "models/boat.boat", bool debug = false);
         Model GetModel();
         float GetMass();
-        float GetInertiaModifier();
+        mat3 GetInertiaModifier();
         vec3 GetCenterOfMass();
 };

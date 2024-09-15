@@ -172,7 +172,7 @@ void render() {
 
             buoyantModels[i]->GetModel().draw();
 
-            // Run voxel debug visualization
+            /*// Run voxel debug visualization
             {
                 cameraShader->BindShader();
                 
@@ -181,7 +181,7 @@ void render() {
                 glUniformMatrix4fv(m_mvpdebuglocation, 1, GL_FALSE, value_ptr(m_mvpdebug));
                 
                 buoyantModels[i]->GetModel().drawVoxelsDebug();
-            }
+            }*/
 
             // Run force visualization shader
             glDisable(GL_DEPTH_TEST);
@@ -224,10 +224,12 @@ void render() {
             buoyantApplicationShader->BindShader();
 
 
-            for (int i = 0; i < buoyantModels.size(); i++) {
+            {
                 glUniform1i(boatIndexLocation, i);
                 glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
-                glUniform1f(boatInertiaModifierLocation, buoyantModels[i]->GetInertiaModifier());
+                //glUniform1f(boatInertiaModifierLocation, 0.00004);
+                mat3 m_inertia_modifier = buoyantModels[i]->GetInertiaModifier();
+                glUniformMatrix3fv(boatInertiaModifierLocation, 1, GL_FALSE, value_ptr(m_inertia_modifier));
                 glUniform1ui(deltaTimeLocation, frameFrequency);
                 glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
                 glUniformMatrix4fv(m_scaleRotationLocation, 1, GL_FALSE, value_ptr(m_scale_rotation));
@@ -427,7 +429,7 @@ int main(int argc, char* argv[]) {
     oceanPlane = make_shared<Model>("models/ocean_plane.obj");
     oceanPlane->SetScale(vec3(64, 0, 64));
     if (argc > 1) {
-        buoyantModels.push_back(make_shared<Buoyant>(argv[1], true));
+        buoyantModels.push_back(make_shared<Buoyant>(argv[1]));
     }
     else {
         buoyantModels.push_back(make_shared<Buoyant>());

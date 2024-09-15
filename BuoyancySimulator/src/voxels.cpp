@@ -7,6 +7,7 @@
 #include "tiny_obj_loader.h"
 #include <vec3.hpp>
 #include <mat4x4.hpp>
+#include <mat3x3.hpp>
 #include <cmath>
 #include <string>
 #include <iostream>
@@ -189,7 +190,6 @@ void Voxels::FillVolume(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
     for (int x = 0; x < this->values.size(); x++) {
         for (int y = 0; y < this->values[x].size(); y++) {
             for (int z = 0; z < this->values[x][y].size(); z++) {
-                cout << "Voxel: " << x << ", " << y << ", " << z << endl;
                 vec3 voxelCenter = this->minCorner + vec3(x * this->voxelLength, y * this->voxelLength, z * this->voxelLength) + vec3(this->voxelLength / 2);
                 float shortestDist = -1;
                 vec3 closestTriangleNormal;
@@ -282,10 +282,53 @@ float Voxels::GetVolume() {
         for (int y = 0; y < this->values[x].size(); y++) {
             for (int z = 0; z < this->values[x][y].size(); z++) {
                 if (this->values[x][y][z]) {
-                    total += voxelVolume;
+                    total += 1;
                 }
             }
         }
     }
     return total * voxelVolume;
+}
+
+mat3 Voxels::GetInvertedInertiaTensor(float mass, vec3 centerOfMass) {
+    mat3 inertiaTensor = mat3(0);
+    int total = 0;
+    for (int x = 0; x < this->values.size(); x++) {
+        for (int y = 0; y < this->values[x].size(); y++) {
+            for (int z = 0; z < this->values[x][y].size(); z++) {
+                total++;
+            }
+        }
+    }
+
+
+    for (int x = 0; x < this->values.size(); x++) {
+        for (int y = 0; y < this->values[x].size(); y++) {
+            for (int z = 0; z < this->values[x][y].size(); z++) {
+                if (this->values[x][y][z]) {
+                    vec3 voxelCenter = this->minCorner + vec3(x * this->voxelLength, y * this->voxelLength, z * this->voxelLength) + vec3(this->voxelLength / 2);
+                    for (float c = 0; c <= 2; c++) {
+                        for (float r = 0; r <= 2; r++) {
+                            if (c == r) 
+                            {
+                                if (c == 0) {
+                                    inertiaTensor[c][r] += (mass / total) * (pow(voxelCenter.y, 2) + pow(voxelCenter.z, 2));
+                                }
+                                else if (c == 1) {
+                                    inertiaTensor[c][r] += (mass / total) * (pow(voxelCenter.z, 2) + pow(voxelCenter.x, 2));
+                                }
+                                else if (c == 2) {
+                                    inertiaTensor[c][r] += (mass / total) * (pow(voxelCenter.x, 2) + pow(voxelCenter.y, 2));
+                                }
+                            }
+                            else {
+                                inertiaTensor[c][r] += (mass / total) * (voxelCenter[c] + voxelCenter[c]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return inverse(inertiaTensor);
 }
