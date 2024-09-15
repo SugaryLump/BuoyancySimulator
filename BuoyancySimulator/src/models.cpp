@@ -226,7 +226,7 @@ Voxels Model::GenerateVoxels(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {
             ),
         this->minBoundingBox[1].z - this->minBoundingBox[0].z
     );
-    return Voxels(15/maxDist, this->minBoundingBox, attrib, shape);
+    return Voxels(maxDist/15, this->minBoundingBox, attrib, shape);
 }
 
 void Model::InitializeVoxelsDebug(tinyobj::attrib_t attrib, tinyobj::shape_t shape) {

@@ -27,4 +27,5 @@ class Voxels {
         float GetVoxelLength();
         float GetVolume();
         vec3 GetAveragePosition();
+        mat3 GetInvertedInertiaTensor(float mass, vec3 centerOfMass);
 };
