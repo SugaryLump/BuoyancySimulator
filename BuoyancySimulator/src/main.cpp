@@ -1,12 +1,6 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 
-#include "main.hpp"
-#include "camera.hpp"
-#include "models.hpp"
-#include "shader.hpp"
-#include "buoyant.hpp"
-
 #include <iostream>
 #include <vec4.hpp>
 #include <memory>
@@ -17,6 +11,15 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#define GLM_ENABLE_EXPERIMENTAL
+
+#include "main.hpp"
+#include "camera.hpp"
+#include "models.hpp"
+#include "shader.hpp"
+#include "buoyant.hpp"
 
 using namespace std;
 using namespace glm;
@@ -44,6 +47,7 @@ shared_ptr<Shader> forcesReductionShader;
 shared_ptr<Shader> torquesReductionShader;
 shared_ptr<Shader> buoyantApplicationShader;
 shared_ptr<Shader> forceVisualizationShader;
+shared_ptr<Shader> cameraShader;
 
 GLuint elapsedTime = 0;
 GLuint frameFrequency = 0;
@@ -168,6 +172,17 @@ void render() {
 
             buoyantModels[i]->GetModel().draw();
 
+            /*// Run voxel debug visualization
+            {
+                cameraShader->BindShader();
+                
+                mat4 m_mvpdebug = camera->GetViewProjectionMatrix();
+                GLuint m_mvpdebuglocation = glGetUniformLocation(cameraShader->shaderProgram, "m_mvp");
+                glUniformMatrix4fv(m_mvpdebuglocation, 1, GL_FALSE, value_ptr(m_mvpdebug));
+                
+                buoyantModels[i]->GetModel().drawVoxelsDebug();
+            }*/
+
             // Run force visualization shader
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_CULL_FACE);
@@ -209,10 +224,12 @@ void render() {
             buoyantApplicationShader->BindShader();
 
 
-            for (int i = 0; i < buoyantModels.size(); i++) {
+            {
                 glUniform1i(boatIndexLocation, i);
                 glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
-                glUniform1f(boatInertiaModifierLocation, buoyantModels[i]->GetInertiaModifier());
+                //glUniform1f(boatInertiaModifierLocation, 0.00004);
+                mat3 m_inertia_modifier = buoyantModels[i]->GetInertiaModifier();
+                glUniformMatrix3fv(boatInertiaModifierLocation, 1, GL_FALSE, value_ptr(m_inertia_modifier));
                 glUniform1ui(deltaTimeLocation, frameFrequency);
                 glUniformMatrix4fv(m_vpLocation, 1, GL_FALSE, value_ptr(m_vp));
                 glUniformMatrix4fv(m_scaleRotationLocation, 1, GL_FALSE, value_ptr(m_scale_rotation));
@@ -426,6 +443,7 @@ int main(int argc, char* argv[]) {
     torquesReductionShader = make_shared<Shader>("shaders/torques_reduction");
     buoyantApplicationShader = make_shared<Shader>("shaders/buoyant_application");
     forceVisualizationShader = make_shared<Shader>("shaders/force_visualization");
+    cameraShader = make_shared<Shader>("shaders/camera");
 
     // Initialize SSBOs
     initSSBOs();

@@ -1,6 +1,7 @@
 #include "buoyant.hpp"
 
 #include "models.hpp"
+#include "voxels.hpp"
 
 #include <string>
 #include <iostream>
@@ -12,7 +13,7 @@
 using namespace glm;
 using namespace std;
 
-Buoyant::Buoyant(string boatFileName) {
+Buoyant::Buoyant(string boatFileName, bool debug) {
     this->mass = DEFAULT_MASS;
     this->centerOfMass = DEFAULT_CENTER_OF_MASS;
     this->inertiaModifier = DEFAULT_INERTIA_MODIFIER;
@@ -23,6 +24,8 @@ Buoyant::Buoyant(string boatFileName) {
     ifstream boatFile;
     boatFile.open(boatFileName);
     string entry;
+
+    bool automateParams = false;
 
     cout << "Reading " << boatFileName << endl;
     while (getline(boatFile, entry)) {
@@ -68,14 +71,40 @@ Buoyant::Buoyant(string boatFileName) {
             cout << "volume=" << volume << endl;
         }
         else if (key.compare("inertiaModifier") == 0) {
-            this->inertiaModifier = stof(value);
-            cout << "inertiaModifier" << this->inertiaModifier << endl;
+            float inertiaMod = stof(value);
+            this->inertiaModifier = mat3(inertiaModifier);
+            cout << "inertiaModifier" << inertiaMod << endl;
+        }
+        else if (key.compare("automateParams") == 0) {
+            automateParams = value.compare("true") == 0;
         }
     }
     boatFile.close();
-    cout << "Done reading " << boatFileName << endl;
+    
+    this->model = Model(modelFileName, volume, worldPosition, debug);
+    if (automateParams) {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
 
-    this->model = Model(modelFileName, volume, worldPosition);
+        string err;
+
+        bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, modelFileName.c_str());
+        Voxels voxels = this->model.GenerateVoxels(attrib, shapes[0]);
+        vec3 averagePosition = voxels.GetAveragePosition();
+        float estimatedVolume = voxels.GetVolume();
+        mat3 inertiaMod = voxels.GetInvertedInertiaTensor(this->mass, averagePosition);
+        cout << "Estimated center of mass: " << averagePosition.x << ", " << averagePosition.y << ", " << averagePosition.z << endl;
+        cout << "Estimated volume: " << estimatedVolume << endl;
+        cout << "Estimated inverted inertia tensor:" << endl;
+        cout << inertiaMod[0][0] << ", " << inertiaMod[1][0] << ", " << inertiaMod[2][0] << endl;
+        cout << inertiaMod[0][1] << ", " << inertiaMod[1][1] << ", " << inertiaMod[2][1] << endl;
+        cout << inertiaMod[0][2] << ", " << inertiaMod[1][2] << ", " << inertiaMod[2][2] << endl;
+        this->centerOfMass = averagePosition;
+        this->model.SetVolume(estimatedVolume);
+        this->inertiaModifier = inertiaMod;
+    }
+    cout << "Done reading " << boatFileName << endl;
 }
 
 Model Buoyant::GetModel() {
@@ -86,7 +115,7 @@ float Buoyant::GetMass() {
     return this->mass;
 }
 
-float Buoyant::GetInertiaModifier() {
+mat3 Buoyant::GetInertiaModifier() {
     return this->inertiaModifier;
 }
 
