@@ -35,6 +35,7 @@ layout (std430, binding = 10) buffer boatOldSubmergedAreasSSBO {
     float boatOldSubmergedAreas[];
 };
 
+uniform uint maxTriangles;
 uniform int boatIndex;
 uniform float boatMass;
 uniform float boatTotalArea;
@@ -624,17 +625,17 @@ void slammingForce(vec3 A, vec3 B, vec3 C, vec3 tNormal, float submergedArea, in
     vec3 tCentroid = triangleCentroid(A, B, C);
     vec3 tVelocity =  triangleVelocity(tCentroid, worldCenterOfMass);
     float tVelocityMagnitude = length(tVelocity);
-    float tOldVelocityMagnitude = length(boatOldTriangleVelocities[gl_PrimitiveIDIn].xyz);
+    float tOldVelocityMagnitude = length(boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn].xyz);
     float tArea = triangleArea(A, B, C);
     float tCosVelocityNormal = (triangleVelocityNormalCos(tVelocity, tNormal));
     float oldDeltaTimeSeconds = float(oldDeltaTime) / 1000.0;
     if (submergedArea == 0 || oldDeltaTimeSeconds == 0 || tVelocityMagnitude <= 0.5 || tCosVelocityNormal <= 0) {
-        boatOldTriangleVelocities[gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
-        boatOldSubmergedAreas[gl_PrimitiveIDIn] = submergedArea;
+        boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
+        boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn] = submergedArea;
         return;
     }
     vec3 Fstop = -boatMass * tVelocity * 2 * submergedArea / boatTotalArea;
-    float tOldSubmergedArea = boatOldSubmergedAreas[gl_PrimitiveIDIn];
+    float tOldSubmergedArea = boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn];
     float gamma = (submergedArea * tVelocityMagnitude - tOldSubmergedArea * tOldVelocityMagnitude) / (tArea * oldDeltaTimeSeconds);
     float gammaMax = tVelocityMagnitude / oldDeltaTimeSeconds;
     float multiplier = gamma / gammaMax;
@@ -648,8 +649,8 @@ void slammingForce(vec3 A, vec3 B, vec3 C, vec3 tNormal, float submergedArea, in
     forcesArray[0] += Fslam;
     torquesArray[0] += cross(tCentroid - worldCenterOfMass, Fslam);
 
-    boatOldTriangleVelocities[gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
-    boatOldSubmergedAreas[gl_PrimitiveIDIn] = submergedArea;
+    boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
+    boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn] = submergedArea;
 }
 
 void main() {
