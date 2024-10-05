@@ -36,7 +36,7 @@ layout (std430, binding = 10) buffer boatOldSubmergedAreasSSBO {
 };
 
 uniform uint maxTriangles;
-uniform int boatIndex;
+uniform uint boatIndex;
 uniform float boatMass;
 uniform float boatTotalArea;
 uniform float boatLength;

@@ -33,7 +33,7 @@ layout (std430, binding = 8) buffer torquesSSBO {
     vec4 torques[];
 };
 
-uniform int boatIndex;
+uniform uint boatIndex;
 uniform float boatMass;
 uniform float boatInertiaModifier;
 

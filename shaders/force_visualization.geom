@@ -23,7 +23,7 @@ uniform mat4 m_scale_rotation;
 uniform mat4 m_translation;
 uniform mat4 m_vp;
 
-uniform int boatIndex;
+uniform uint boatIndex;
 
 out vec4 colorIn;
 

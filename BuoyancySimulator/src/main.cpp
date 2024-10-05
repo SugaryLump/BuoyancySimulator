@@ -229,7 +229,7 @@ void render() {
 
 
             {
-                glUniform1i(boatIndexLocation, i);
+                glUniform1ui(boatIndexLocation, boatIndex);
                 glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
                 //glUniform1f(boatInertiaModifierLocation, 0.00004);
                 mat3 m_inertia_modifier = buoyantModels[i]->GetInertiaModifier();
