@@ -1,7 +1,6 @@
 modelFile=cube.obj
-mass=500
+mass=750
 worldPosition=0,-0.2,0
-centerOfMass=0,-0.1,0
+centerOfMass=0,0,0.5
 volume=1
-inertiaModifier=0.003821823605
-automateParams=true
+automateInertia=true

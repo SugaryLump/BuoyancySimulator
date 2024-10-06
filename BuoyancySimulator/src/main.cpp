@@ -186,7 +186,7 @@ void render() {
                 
                 buoyantModels[i]->GetModel().drawVoxelsDebug();
             }*/
-
+            glMemoryBarrier(GL_ALL_BARRIER_BITS);
             // Run force visualization shader
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_CULL_FACE);

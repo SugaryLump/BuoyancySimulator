@@ -307,22 +307,23 @@ mat3 Voxels::GetInvertedInertiaTensor(float mass, vec3 centerOfMass) {
             for (int z = 0; z < this->values[x][y].size(); z++) {
                 if (this->values[x][y][z]) {
                     vec3 voxelCenter = this->minCorner + vec3(x * this->voxelLength, y * this->voxelLength, z * this->voxelLength) + vec3(this->voxelLength / 2);
-                    for (float c = 0; c <= 2; c++) {
-                        for (float r = 0; r <= 2; r++) {
+                    vec3 radius = voxelCenter - centerOfMass;
+                    for (int c = 0; c <= 2; c++) {
+                        for (int r = 0; r <= 2; r++) {
                             if (c == r) 
                             {
                                 if (c == 0) {
-                                    inertiaTensor[c][r] += (mass / total) * (pow(voxelCenter.y, 2) + pow(voxelCenter.z, 2));
+                                    inertiaTensor[c][r] += (mass / total) * (pow(radius.y, 2) + pow(radius.z, 2));
                                 }
                                 else if (c == 1) {
-                                    inertiaTensor[c][r] += (mass / total) * (pow(voxelCenter.z, 2) + pow(voxelCenter.x, 2));
+                                    inertiaTensor[c][r] += (mass / total) * (pow(radius.z, 2) + pow(radius.x, 2));
                                 }
                                 else if (c == 2) {
-                                    inertiaTensor[c][r] += (mass / total) * (pow(voxelCenter.x, 2) + pow(voxelCenter.y, 2));
+                                    inertiaTensor[c][r] += (mass / total) * (pow(radius.x, 2) + pow(radius.y, 2));
                                 }
                             }
                             else {
-                                inertiaTensor[c][r] += (mass / total) * (voxelCenter[c] + voxelCenter[c]);
+                                inertiaTensor[c][r] -= (mass / total) * radius[c] * radius[r];
                             }
                         }
                     }

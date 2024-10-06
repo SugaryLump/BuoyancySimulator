@@ -142,9 +142,9 @@ vec3 rotate(vec3 vector, vec3 angularPosition) {
     float yz = y * z;
     float zz = z * z;
 
-    mat3 rotationMatrix = mat3(xx + (1 - xx) * cosAngle,    xy * (1 - cosAngle) + z * sinAngle,   xz * (1 - cosAngle) - y * sinAngle,
-                               xy * (1 - cosAngle) - z * sinAngle, yy + (1 - yy) * cosAngle,      yz * (1 - cosAngle) + x * sinAngle,
-                               xz * (1 - cosAngle) + y * sinAngle, yz * (1 - cosAngle) - x * sinAngle,   zz + (1 - zz) * cosAngle);
+    mat3 rotationMatrix = mat3(cosAngle + xx * (1 - cosAngle),     xy * (1 - cosAngle) - z * sinAngle,   xz * (1 - cosAngle) + y * sinAngle,
+                               xy * (1 - cosAngle) + z * sinAngle, cosAngle + yy * (1 - cosAngle),       yz * (1 - cosAngle) - x * sinAngle,
+                               xz * (1 - cosAngle) - y * sinAngle, yz * (1 - cosAngle) + x * sinAngle,   cosAngle + zz * (1 - cosAngle));
     
     return rotationMatrix * vector; 
 }
@@ -292,7 +292,7 @@ float triangleArea(vec3 A, vec3 B, vec3 C) {
 // Calculates the buoyancy force exerted on a triangle composed of these vertices
 vec3 buoyancyForce(vec3 pointOfApplication, vec3 tNormal, float tArea) {
     float hCenter = surfaceDistance(pointOfApplication);
-    if (hCenter > 0) {
+    if (hCenter >= 0) {
         return vec3(0.0);
     }
     float force_y = (G * hCenter * WATER_DENSITY * tArea * tNormal).y;
@@ -580,6 +580,33 @@ void transformAndEmitVertices(vec3 A, vec3 B, vec3 C) {
     EndPrimitive();
 }
 
+void setTriangleForceAndTorqueOLD(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, vec3 tNormal, int index, float resC, vec3 worldCenterOfMass) {
+    vec3 force = vec3(0.0);
+
+    // Triangle splitting
+    vec3 tCentroid = triangleCentroid(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
+    float tArea = triangleArea(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
+    vec3 tVelocity = triangleVelocity(tCentroid, worldCenterOfMass);
+    float tVelocityMagnitude = length(tVelocity);
+    float tCosVelocityNormal = triangleVelocityNormalCos(tVelocity, tNormal);
+
+    // Buoyancy Force
+    force += buoyancyForce(tCentroid, tNormal, tArea);
+
+    // Viscous Water Resistance
+    force += viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
+
+    // Pressure Drag Force
+    force += pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosVelocityNormal);
+
+    // Torque
+    vec3 torque = cross(tCentroid - worldCenterOfMass, force);
+
+    // Final sum
+    forcesArray[index] = force;
+    torquesArray[index] = torque;
+}
+
 void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, vec3 tNormal, int index, float resC, vec3 worldCenterOfMass) {
     vec3 upForce = vec3(0.0);
     vec3 downForce = vec3(0.0);
@@ -605,12 +632,12 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
 
     // Viscous Water Resistance
-    upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
-    downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
+    //upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
+    //downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
 
     // Pressure Drag Force
-    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
-    downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
+    //upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
+    //downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
 
     // Torque
     vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
@@ -820,19 +847,19 @@ void main() {
 
     // case 3, where all points of the original triangle are submerged
     if (workingTriangles == 1 && submergedTriangles == 1) {
-        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 0, resC, worldCenterOfMass);
+        setTriangleForceAndTorqueOLD(forcesAux, torquesAux, vertices, tNormal, 0, resC, worldCenterOfMass);
     }
     // case 1 and 2, where the third generated triangle is always submerged
     else if (workingTriangles > 1) {
-        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 2, resC, worldCenterOfMass);
+        setTriangleForceAndTorqueOLD(forcesAux, torquesAux, vertices, tNormal, 2, resC, worldCenterOfMass);
 
         // case 2, where the second generated triangle is always submerged
         if (submergedTriangles == 2) {
-            setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 1, resC, worldCenterOfMass);
+            setTriangleForceAndTorqueOLD(forcesAux, torquesAux, vertices, tNormal, 1, resC, worldCenterOfMass);
         }
     }
 
-    slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass);
+    //slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass);
 
     forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);

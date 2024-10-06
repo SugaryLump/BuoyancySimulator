@@ -35,7 +35,7 @@ layout (std430, binding = 8) buffer torquesSSBO {
 
 uniform uint boatIndex;
 uniform float boatMass;
-uniform float boatInertiaModifier;
+uniform mat3 boatInertiaModifier;
 
 uniform uint deltaTime;
 
@@ -84,9 +84,9 @@ vec3 rotate(vec3 vector, vec3 angularPosition) {
     float yz = y * z;
     float zz = z * z;
 
-    mat3 rotationMatrix = mat3(xx + (1 - xx) * cosAngle,    xy * (1 - cosAngle) + z * sinAngle,   xz * (1 - cosAngle) - y * sinAngle,
-                               xy * (1 - cosAngle) - z * sinAngle, yy + (1 - yy) * cosAngle,      yz * (1 - cosAngle) + x * sinAngle,
-                               xz * (1 - cosAngle) + y * sinAngle, yz * (1 - cosAngle) - x * sinAngle,   zz + (1 - zz) * cosAngle);
+    mat3 rotationMatrix = mat3(cosAngle + xx * (1 - cosAngle),     xy * (1 - cosAngle) - z * sinAngle,   xz * (1 - cosAngle) + y * sinAngle,
+                               xy * (1 - cosAngle) + z * sinAngle, cosAngle + yy * (1 - cosAngle),       yz * (1 - cosAngle) - x * sinAngle,
+                               xz * (1 - cosAngle) - y * sinAngle, yz * (1 - cosAngle) + x * sinAngle,   cosAngle + zz * (1 - cosAngle));
     
     return rotationMatrix * vector; 
 }
