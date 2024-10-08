@@ -64,7 +64,7 @@ vec3 nextAngularVelocity(float deltaTime) {
 
 // !!!Same issue as before!!!
 vec3 nextAngularPosition(vec3 angularVelocity, float deltaTime) {
-    return boatAngularPositions[boatIndex].xyz + angularVelocity * deltaTime;
+    return vec3(3.14, 3.14, 0);
 }
 
 // Rotate a vector using a given angular position
@@ -73,22 +73,8 @@ vec3 rotate(vec3 vector, vec3 angularPosition) {
     float cosAngle = cos(angle);
     float sinAngle = sin(angle);
     
-    float x = (angle == 0) ? 0 : angularPosition.x / angle;
-    float y = (angle == 0) ? 0 : angularPosition.y / angle;
-    float z = (angle == 0) ? 0 : angularPosition.z / angle;
-    
-    float xx = x * x;
-    float xy = x * y;
-    float xz = x * z;
-    float yy = y * y;
-    float yz = y * z;
-    float zz = z * z;
-
-    mat3 rotationMatrix = mat3(cosAngle + xx * (1 - cosAngle),     xy * (1 - cosAngle) - z * sinAngle,   xz * (1 - cosAngle) + y * sinAngle,
-                               xy * (1 - cosAngle) + z * sinAngle, cosAngle + yy * (1 - cosAngle),       yz * (1 - cosAngle) - x * sinAngle,
-                               xz * (1 - cosAngle) - y * sinAngle, yz * (1 - cosAngle) + x * sinAngle,   cosAngle + zz * (1 - cosAngle));
-    
-    return rotationMatrix * vector; 
+    vec3 e = (angle == 0) ? vec3(0) : angularPosition / angle;
+    return vector + (sinAngle) * (cross(e, vector)) + (1 - cosAngle) * (cross(e, cross(e, vector))); 
 }
 
 // Apply model transforms to trasnform vertex to world space
