@@ -42,6 +42,29 @@ vec3 triangleCentroid(vec3 A, vec3 B, vec3 C) {
     return (A + B + C) / 3.0;
 }
 
+mat3 quaternionToRotationMatrix(vec4 quat) {
+    float i = quat.x;
+    float j = quat.y;
+    float k = quat.z;
+    float r = quat.w;
+    float ii = i * i;
+    float ij = i * j;
+    float ik = i * k;
+    float ir = i * r;
+    float jj = j * j;
+    float jk = j * k;
+    float jr = j * r;
+    float kk = k * k;
+    float kr = k * r;
+    float rr = r * r;
+
+    return mat3(
+        -1 + 2*ii + 2*rr, 2 * (ij + kr), 2 * (ik - jr),
+        2 * (ij - kr), -1 + 2*jj + 2*rr, 2 * (jk + ir),
+        2 * (ik + jr), 2 * (jk - ir), -1 + 2*kk + 2*rr
+    );
+}
+
 // Apply model transforms to trasnform vertex to world space
 vec3 applyBoatTransforms(vec4 vertex) {
     vec3 worldVertex = vec3(vertex);
@@ -50,7 +73,7 @@ vec3 applyBoatTransforms(vec4 vertex) {
     // 3. Apply center of mass translation
     // worldVertex = worldVertex - boatCenterOfMass;
     // 4. Apply boat rotation
-    worldVertex = rotate(worldVertex, vec3(boatAngularPositions[boatIndex]));
+    worldVertex = quaternionToRotationMatrix(boatAngularPositions[boatIndex]) * worldVertex;
     // 5. Apply model translation
     worldVertex = vec3(m_translation * vec4(worldVertex, 1.0));
     // 6. Apply boat translation

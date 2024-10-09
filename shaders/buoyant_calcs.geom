@@ -125,14 +125,45 @@ float surfaceDistance(vec3 vertex) {
     return vertex.y - waveHeightAtPoint(vertex.x, vertex.z);
 }
 
-// Rotate a vector using a given angular position
-vec3 rotate(vec3 vector, vec3 angularPosition) {
-    float angle = length(angularPosition);
-    float cosAngle = cos(angle);
-    float sinAngle = sin(angle);
-    
-    vec3 e = (angle == 0) ? vec3(0) : angularPosition / angle;
-    return vector + (sinAngle) * (cross(e, vector)) + (1 - cosAngle) * (cross(e, cross(e, vector))); 
+vec4 axisAngleToQuaternion(vec3 axisAngle) {
+    float angle = length(axisAngle);
+    if (angle == 0) return vec4(0,0,0,1);
+    float sinHalfAngle = sin(angle / 2.0);
+    float cosHalfAngle = cos(angle / 2.0);
+    return vec4(normalize(axisAngle) * sinHalfAngle, cosHalfAngle);
+}
+
+mat3 quaternionToRotationMatrix(vec4 quat) {
+    float i = quat.x;
+    float j = quat.y;
+    float k = quat.z;
+    float r = quat.w;
+    float ii = i * i;
+    float ij = i * j;
+    float ik = i * k;
+    float ir = i * r;
+    float jj = j * j;
+    float jk = j * k;
+    float jr = j * r;
+    float kk = k * k;
+    float kr = k * r;
+    float rr = r * r;
+
+    return mat3(
+        -1 + 2*ii + 2*rr, 2 * (ij + kr), 2 * (ik - jr),
+        2 * (ij - kr), -1 + 2*jj + 2*rr, 2 * (jk + ir),
+        2 * (ik + jr), 2 * (jk - ir), -1 + 2*kk + 2*rr
+    );
+}
+
+vec4 multiplyQuaternions(vec4 q1, vec4 q2) {
+    mat4 auxMatrix = mat4(
+        q1.w, q1.z, -q1.y, -q1.x,
+        -q1.z, q1.w, q1.x, -q1.y,
+        q1.y, -q1.x, q1.w, -q1.z,
+        q1.x, q1.y, q1.z, q1.w
+    );
+    return auxMatrix * q2;
 }
 
 // Apply model transforms to trasnform vertex to world space
@@ -143,7 +174,7 @@ vec3 applyBoatTransforms(vec4 vertex) {
     // 3. Apply center of mass translation
     // worldVertex = worldVertex - boatCenterOfMass;
     // 4. Apply boat rotation
-    worldVertex = rotate(worldVertex, vec3(boatAngularPositions[boatIndex]));
+    worldVertex = quaternionToRotationMatrix(boatAngularPositions[boatIndex]) * worldVertex;
     // 5. Apply model translation
     worldVertex = vec3(m_translation * vec4(worldVertex, 1.0));
     // 6. Apply boat translation
@@ -349,15 +380,15 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
 
     // This is like this for rudimentar parametrization
     if (tCosTheta > 0) {
-        C_D1 = 100;
-        C_D2 = 0;
+        C_D1 = 600;
+        C_D2 = 150;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
         orientation = -1;
     }
     else {
-        C_D1 = 100;
-        C_D2 = 0;
+        C_D1 = 600;
+        C_D2 = 150;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
         orientation = 1;
@@ -454,7 +485,7 @@ void setTriangleForceAndTorqueOLD(inout vec3[3] forcesArray, inout vec3[3] torqu
     // Torque
     vec3 torque = cross(tCentroid - worldCenterOfMass, force);
 
-    //transformAndEmitVertices(tCentroid, tVelocity);
+    transformAndEmitVertices(tCentroid, tVelocity/2);
 
     // Final sum
     forcesArray[index] = force;
@@ -486,12 +517,12 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
 
     // Viscous Water Resistance
-    //upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
-    //downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
+    upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
+    downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
 
     // Pressure Drag Force
-    //upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
-    //downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
+    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
+    downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
 
     // Torque
     vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
@@ -523,7 +554,7 @@ void slammingForce(vec3 A, vec3 B, vec3 C, vec3 tNormal, float submergedArea, in
     multiplier = multiplier < 0 ? 0 : (multiplier > 1 ? 1 : multiplier);
     multiplier = pow(multiplier, 2);
 
-    transformAndEmitVertices(A, B, C);
+    //transformAndEmitVertices(A, B, C);
 
     vec3 Fslam = multiplier * tCosVelocityNormal * Fstop;
 
@@ -702,19 +733,19 @@ void main() {
 
     // case 3, where all points of the original triangle are submerged
     if (workingTriangles == 1 && submergedTriangles == 1) {
-        setTriangleForceAndTorqueOLD(forcesAux, torquesAux, vertices, tNormal, 0, resC, worldCenterOfMass, originPoint);
+        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 0, resC, worldCenterOfMass, originPoint);
     }
     // case 1 and 2, where the third generated triangle is always submerged
     else if (workingTriangles > 1) {
-        setTriangleForceAndTorqueOLD(forcesAux, torquesAux, vertices, tNormal, 2, resC, worldCenterOfMass, originPoint);
+        setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 2, resC, worldCenterOfMass, originPoint);
 
         // case 2, where the second generated triangle is always submerged
         if (submergedTriangles == 2) {
-            setTriangleForceAndTorqueOLD(forcesAux, torquesAux, vertices, tNormal, 1, resC, worldCenterOfMass, originPoint);
+            setTriangleForceAndTorque(forcesAux, torquesAux, vertices, tNormal, 1, resC, worldCenterOfMass, originPoint);
         }
     }
 
-    //slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass, originPoint);
+    slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass, originPoint);
 
     forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);

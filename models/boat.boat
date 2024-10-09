@@ -1,6 +1,6 @@
 modelFile=boat.obj
 mass=10000
-worldPosition=0,3,-3
+worldPosition=0,10,-3
 centerOfMass=0,-10,-0.5
 automateInertia=true
 automateVolume=true

@@ -110,8 +110,8 @@ Buoyant::Buoyant(string boatFileName, bool debug) {
             this->model.SetVolume(estimatedVolume);
         }
         if (automateParams || automateInertia) {
-            mat3 inertiaMod = voxels.GetInvertedInertiaTensor(this->mass, this->centerOfMass);
-            cout << "Estimated inverted inertia tensor:" << endl;
+            mat3 inertiaMod = voxels.GetInertiaTensor(this->mass, this->centerOfMass);
+            cout << "Estimated inertia tensor:" << endl;
             cout << inertiaMod[0][0] << ", " << inertiaMod[1][0] << ", " << inertiaMod[2][0] << endl;
             cout << inertiaMod[0][1] << ", " << inertiaMod[1][1] << ", " << inertiaMod[2][1] << endl;
             cout << inertiaMod[0][2] << ", " << inertiaMod[1][2] << ", " << inertiaMod[2][2] << endl;

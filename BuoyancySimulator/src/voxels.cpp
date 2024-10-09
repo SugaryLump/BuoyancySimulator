@@ -290,7 +290,7 @@ float Voxels::GetVolume() {
     return total * voxelVolume;
 }
 
-mat3 Voxels::GetInvertedInertiaTensor(float mass, vec3 centerOfMass) {
+mat3 Voxels::GetInertiaTensor(float mass, vec3 centerOfMass) {
     mat3 inertiaTensor = mat3(0);
     int total = 0;
     for (int x = 0; x < this->values.size(); x++) {
@@ -331,5 +331,5 @@ mat3 Voxels::GetInvertedInertiaTensor(float mass, vec3 centerOfMass) {
             }
         }
     }
-    return inverse(inertiaTensor);
+    return inertiaTensor;
 }

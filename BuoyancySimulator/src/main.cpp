@@ -342,7 +342,11 @@ void initSSBOs() {
     }
     float nBoatsZeroVec4s[buoyantModels.size() * 4];
     memset(nBoatsZeroVec4s, 0, sizeof(nBoatsZeroVec4s));
-    float tmpSpeed[4] = {0, 3.1415 * 0.1, 0, 0};
+    float nBoatsTrailingOnesVec4s[buoyantModels.size() * 4];
+    for (int i = 0; i < buoyantModels.size() * 4; i++) {
+        nBoatsTrailingOnesVec4s[i] = (i + 1) % 4 == 0 ? 1 : 0;
+    }
+    //float tmpSpeed[4] = {0, 3.1415 * 0.1, 0, 0};
     float maxSplitTrianglesZeroVec4s[maxTriangleCount * 3 * 4];
     memset(maxSplitTrianglesZeroVec4s, 0, sizeof(maxSplitTrianglesZeroVec4s));
     float maxTrianglesZeroVec4s[maxTriangleCount * 4];
@@ -374,7 +378,7 @@ void initSSBOs() {
 
     glGenBuffers(1, &boatAngularVelocitiesSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatAngularVelocitiesSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), tmpSpeed, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, boatAngularVelocitiesSSBO);
 
     glGenBuffers(1, &boatOldTriangleVelocitiesSSBO);
@@ -389,7 +393,7 @@ void initSSBOs() {
 
     glGenBuffers(1, &boatAngularPositionsSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatAngularPositionsSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsTrailingOnesVec4s, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, boatAngularPositionsSSBO);
 
     glGenBuffers(1, &torquesSSBO);
