@@ -107,6 +107,7 @@ void render() {
         GLuint waveHeightLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "waveHeight");
         GLuint boatMassLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatMass");
         GLuint boatTotalAreaLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatTotalArea");
+        GLuint maxTrianglesLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "maxTriangles");
         GLuint boatIndexLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatIndex");
         GLuint boatLengthLocationCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatLength");
         GLuint boatCenterOfMassCalcs = glGetUniformLocation(buoyantCalcsShader->shaderProgram, "boatCenterOfMass");
@@ -165,6 +166,9 @@ void render() {
 
             glUniform1ui(oldDeltaTimeCalcs, oldFrameFrequency);
 
+            GLuint maxTriangles = maxTriangleCount;
+            glUniform1ui(maxTrianglesLocationCalcs, maxTriangles);
+
             GLuint boatIndex = i;
             glUniform1ui(boatIndexLocationCalcs, (boatIndex));
 
@@ -182,7 +186,7 @@ void render() {
                 
                 buoyantModels[i]->GetModel().drawVoxelsDebug();
             }*/
-
+            glMemoryBarrier(GL_ALL_BARRIER_BITS);
             // Run force visualization shader
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_CULL_FACE);
@@ -225,7 +229,7 @@ void render() {
 
 
             {
-                glUniform1i(boatIndexLocation, i);
+                glUniform1ui(boatIndexLocation, boatIndex);
                 glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
                 //glUniform1f(boatInertiaModifierLocation, 0.00004);
                 mat3 m_inertia_modifier = buoyantModels[i]->GetInertiaModifier();
@@ -329,9 +333,6 @@ void initOceanHeightmapRenderTarget() {
 }
 
 void initSSBOs() {
-    float nBoatsZeroVec4s[buoyantModels.size() * 4];
-    memset(nBoatsZeroVec4s, 0, sizeof(nBoatsZeroVec4s));
-
     maxTriangleCount = buoyantModels[0]->GetModel().GetTriangleCount();
     for (int i = 1; i < buoyantModels.size(); i++) {
         size_t triangleCount = buoyantModels[i]->GetModel().GetTriangleCount();
@@ -339,12 +340,23 @@ void initSSBOs() {
             maxTriangleCount = triangleCount;
         }
     }
+    float nBoatsZeroVec4s[buoyantModels.size() * 4];
+    memset(nBoatsZeroVec4s, 0, sizeof(nBoatsZeroVec4s));
+    float nBoatsTrailingOnesVec4s[buoyantModels.size() * 4];
+    for (int i = 0; i < buoyantModels.size() * 4; i++) {
+        nBoatsTrailingOnesVec4s[i] = (i + 1) % 4 == 0 ? 1 : 0;
+    }
+    //float tmpSpeed[4] = {0, 3.1415 * 0.1, 0, 0};
     float maxSplitTrianglesZeroVec4s[maxTriangleCount * 3 * 4];
     memset(maxSplitTrianglesZeroVec4s, 0, sizeof(maxSplitTrianglesZeroVec4s));
     float maxTrianglesZeroVec4s[maxTriangleCount * 4];
     memset(maxTrianglesZeroVec4s, 0, sizeof(maxTrianglesZeroVec4s));
     float maxTrianglesZeroFloats[maxTriangleCount];
     memset(maxTrianglesZeroFloats, 0, sizeof(maxTrianglesZeroFloats));
+    float maxTrianglesZeroFloatsPerBoat[buoyantModels.size() * maxTriangleCount];
+    memset(maxTrianglesZeroFloatsPerBoat, 0, sizeof(maxTrianglesZeroFloatsPerBoat));
+    float maxTrianglesZeroVec4sPerBoat[buoyantModels.size() * maxTriangleCount * 4];
+    memset(maxTrianglesZeroVec4sPerBoat, 0, sizeof(maxTrianglesZeroVec4sPerBoat));
 
     // GLuint boatPositionsSSBO, forcesSSBO, boatVelocitiesSSBO,
     //   boatAngularPositionsSSBO, boatAngularPositionsSSBO, torquesSSBO;
@@ -371,17 +383,17 @@ void initSSBOs() {
 
     glGenBuffers(1, &boatOldTriangleVelocitiesSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatOldTriangleVelocitiesSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, maxTriangleCount * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * maxTriangleCount * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, boatOldTriangleVelocitiesSSBO);
 
     glGenBuffers(1, &boatOldSubmergedAreasSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatOldSubmergedAreasSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, maxTriangleCount * sizeof(float), maxTrianglesZeroFloats, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * maxTriangleCount * sizeof(float), maxTrianglesZeroFloats, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, boatOldSubmergedAreasSSBO);
 
     glGenBuffers(1, &boatAngularPositionsSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatAngularPositionsSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * sizeof(vec4), nBoatsTrailingOnesVec4s, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, boatAngularPositionsSSBO);
 
     glGenBuffers(1, &torquesSSBO);
@@ -429,7 +441,9 @@ int main(int argc, char* argv[]) {
     oceanPlane = make_shared<Model>("models/ocean_plane.obj");
     oceanPlane->SetScale(vec3(64, 0, 64));
     if (argc > 1) {
-        buoyantModels.push_back(make_shared<Buoyant>(argv[1]));
+        for (int i = 1; i < argc; i++) {
+            buoyantModels.push_back(make_shared<Buoyant>(argv[i]));
+        }
     }
     else {
         buoyantModels.push_back(make_shared<Buoyant>());

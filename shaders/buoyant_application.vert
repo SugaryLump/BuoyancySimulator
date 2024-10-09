@@ -33,15 +33,77 @@ layout (std430, binding = 8) buffer torquesSSBO {
     vec4 torques[];
 };
 
-uniform int boatIndex;
+uniform uint boatIndex;
 uniform float boatMass;
-uniform float boatInertiaModifier;
+uniform mat3 boatInertiaModifier;
 
 uniform uint deltaTime;
 
 uniform mat4 m_vp;
 uniform mat4 m_scale_rotation;
 uniform mat4 m_translation;
+
+vec4 axisAngleToQuaternion(vec3 axisAngle) {
+    float angle = length(axisAngle);
+    if (angle == 0) return vec4(0,0,0,1);
+    float sinHalfAngle = sin(angle / 2.0);
+    float cosHalfAngle = cos(angle / 2.0);
+    return vec4(normalize(axisAngle) * sinHalfAngle, cosHalfAngle);
+}
+
+mat3 quaternionToRotationMatrix(vec4 quat) {
+    float i = quat.x;
+    float j = quat.y;
+    float k = quat.z;
+    float r = quat.w;
+    float ii = i * i;
+    float ij = i * j;
+    float ik = i * k;
+    float ir = i * r;
+    float jj = j * j;
+    float jk = j * k;
+    float jr = j * r;
+    float kk = k * k;
+    float kr = k * r;
+    float rr = r * r;
+
+    return mat3(
+        -1 + 2*ii + 2*rr, 2 * (ij + kr), 2 * (ik - jr),
+        2 * (ij - kr), -1 + 2*jj + 2*rr, 2 * (jk + ir),
+        2 * (ik + jr), 2 * (jk - ir), -1 + 2*kk + 2*rr
+    );
+}
+
+vec4 multiplyQuaternions(vec4 q1, vec4 q2) {
+    mat4 auxMatrix = mat4(
+        q1.w, q1.z, -q1.y, -q1.x,
+        -q1.z, q1.w, q1.x, -q1.y,
+        q1.y, -q1.x, q1.w, -q1.z,
+        q1.x, q1.y, q1.z, q1.w
+    );
+    return auxMatrix * q2;
+}
+
+// Apply model transforms to trasnform vertex to world space
+vec3 applyBoatTransforms(vec4 vertex) {
+    vec3 worldVertex = vec3(vertex);
+    // 1. & 2. Apply model scaling and then rotation
+    worldVertex = vec3(m_scale_rotation * vec4(worldVertex, 1.0));
+    // 3. Apply center of mass translation
+    // worldVertex = worldVertex - boatCenterOfMass;
+    // 4. Apply boat rotation
+    worldVertex = quaternionToRotationMatrix(boatAngularPositions[boatIndex]) * worldVertex;
+    // 5. Apply model translation
+    worldVertex = vec3(m_translation * vec4(worldVertex, 1.0));
+    // 6. Apply boat translation
+    worldVertex = worldVertex + vec3(boatPositions[boatIndex]);
+
+    return worldVertex;
+}
+
+mat3 rotateTensor (mat3 tensor, mat3 rotationMatrix) {
+    return rotationMatrix * tensor * transpose(rotationMatrix);
+}
 
 vec3 nextVelocity(vec3 F, float deltaTime) {
     vec3 acceleration = 1.0 / boatMass * F;
@@ -57,55 +119,15 @@ vec3 nextPosition(vec3 velocity, float deltaTime) {
     return boatPositions[boatIndex].xyz + deltaTime * velocity;
 }
 
-vec3 nextAngularVelocity(float deltaTime) {
-    vec3 acceleration = boatInertiaModifier * torques[0].xyz;
+vec3 nextAngularVelocity(float deltaTime, mat3 inverseInertiaTensor) {
+    vec3 acceleration = inverseInertiaTensor * torques[0].xyz;
     return boatAngularVelocities[boatIndex].xyz + acceleration * deltaTime;
 }
 
 // !!!Same issue as before!!!
-vec3 nextAngularPosition(vec3 angularVelocity, float deltaTime) {
-    return boatAngularPositions[boatIndex].xyz + angularVelocity * deltaTime;
-}
-
-// Rotate a vector using a given angular position
-vec3 rotate(vec3 vector, vec3 angularPosition) {
-    float angle = length(angularPosition);
-    float cosAngle = cos(angle);
-    float sinAngle = sin(angle);
-    
-    float x = (angle == 0) ? 0 : angularPosition.x / angle;
-    float y = (angle == 0) ? 0 : angularPosition.y / angle;
-    float z = (angle == 0) ? 0 : angularPosition.z / angle;
-    
-    float xx = x * x;
-    float xy = x * y;
-    float xz = x * z;
-    float yy = y * y;
-    float yz = y * z;
-    float zz = z * z;
-
-    mat3 rotationMatrix = mat3(xx + (1 - xx) * cosAngle,    xy * (1 - cosAngle) + z * sinAngle,   xz * (1 - cosAngle) - y * sinAngle,
-                               xy * (1 - cosAngle) - z * sinAngle, yy + (1 - yy) * cosAngle,      yz * (1 - cosAngle) + x * sinAngle,
-                               xz * (1 - cosAngle) + y * sinAngle, yz * (1 - cosAngle) - x * sinAngle,   zz + (1 - zz) * cosAngle);
-    
-    return rotationMatrix * vector; 
-}
-
-// Apply model transforms to trasnform vertex to world space
-vec3 applyBoatTransforms(vec4 vertex) {
-    vec3 worldVertex = vec3(vertex);
-    // 1. & 2. Apply model scaling and then rotation
-    worldVertex = vec3(m_scale_rotation * vec4(worldVertex, 1.0));
-    // 3. Apply center of mass translation
-    // worldVertex = worldVertex - boatCenterOfMass;
-    // 4. Apply boat rotation
-    worldVertex = rotate(worldVertex, vec3(boatAngularPositions[boatIndex]));
-    // 5. Apply model translation
-    worldVertex = vec3(m_translation * vec4(worldVertex, 1.0));
-    // 6. Apply boat translation
-    worldVertex = worldVertex + vec3(boatPositions[boatIndex]);
-
-    return worldVertex;
+vec4 nextAngularPosition(vec3 angularVelocity, float deltaTime) {
+    vec4 velocityQuaternion = axisAngleToQuaternion(angularVelocity * deltaTime);
+    return multiplyQuaternions(velocityQuaternion, boatAngularPositions[boatIndex]);
 }
 
 void main() {
@@ -115,15 +137,19 @@ void main() {
 
     float deltaTimeSeconds = float(deltaTime) / 1000.0;
 
+    mat3 boatRotationMatrix = quaternionToRotationMatrix(boatAngularPositions[boatIndex]);
+
+    mat3 boatInverseInertiaTensor = inverse(rotateTensor(boatInertiaModifier, boatRotationMatrix));
+
     vec3 newVelocity = nextVelocity(F, deltaTimeSeconds);
     vec3 newPosition = nextPosition(newVelocity, deltaTimeSeconds);
-    vec3 newAngularVelocity = nextAngularVelocity(deltaTimeSeconds);
-    vec3 newAngularPosition = nextAngularPosition(newAngularVelocity, deltaTimeSeconds);
+    vec3 newAngularVelocity = nextAngularVelocity(deltaTimeSeconds, boatInverseInertiaTensor);
+    vec4 newAngularPosition = nextAngularPosition(newAngularVelocity, deltaTimeSeconds);
     
     boatVelocities[boatIndex] = vec4(newVelocity, 0.0);
     boatPositions[boatIndex] = vec4(newPosition, 0.0);
     boatAngularVelocities[boatIndex] = vec4(newAngularVelocity, 0.0);
-    boatAngularPositions[boatIndex] = vec4(newAngularPosition, 0.0);
+    boatAngularPositions[boatIndex] = newAngularPosition;
 
     // gl_Position = m_vp * m_model * vec4(rotate(vertex, newAngularPosition) + newPosition, 1.0);
     gl_Position = m_vp *  vec4(applyBoatTransforms(vec4(vertex, 1.0)), 1.0);

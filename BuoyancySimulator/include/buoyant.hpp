@@ -7,7 +7,7 @@
 #pragma once
 #define DEFAULT_MASS 400
 #define DEFAULT_CENTER_OF_MASS vec3(0.0)
-#define DEFAULT_INERTIA_MODIFIER mat3(0.03614264953);
+#define DEFAULT_INERTIA_MODIFIER mat3(0.003614264953);
 
 using namespace glm;
 
