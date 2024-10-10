@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(line_strip, max_vertices=15) out;
+layout(triangle_strip, max_vertices=15) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -380,14 +380,14 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
 
     // This is like this for rudimentar parametrization
     if (tCosTheta > 0) {
-        C_D1 = 600;
-        C_D2 = 150;
+        C_D1 = 2000;
+        C_D2 = 400;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
         orientation = -1;
     }
     else {
-        C_D1 = 600;
+        C_D1 = 2000;
         C_D2 = 150;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
@@ -424,8 +424,8 @@ void transformAndEmitVertices(vec3 A, vec3 B, vec3 C) {
     EndPrimitive();
 }
 
-void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float torqueMagnitude) {
-    colorIn = vec4(torqueMagnitude/10, torqueMagnitude/100, torqueMagnitude/1000, 1.0);
+void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float multiplier) {
+    colorIn = vec4(multiplier > 0.1 ? 1 : 0, 0, 0, 1.0);
     vec4 vertex = m_vp * vec4(A, 1.0);
     gl_Position = vertex;
     EmitVertex();
@@ -437,6 +437,20 @@ void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float torqueMagnitude) {
     EmitVertex();
     EndPrimitive();
 }
+
+/*void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float torqueMagnitude) {
+    colorIn = vec4(torqueMagnitude/10, torqueMagnitude/100, torqueMagnitude/1000, 1.0);
+    vec4 vertex = m_vp * vec4(A, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    vertex = m_vp * vec4(B, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    vertex = m_vp * vec4(C, 1.0);
+    gl_Position = vertex;
+    EmitVertex();
+    EndPrimitive();
+}*/
 
 /*void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, vec3 normal) {
     colorIn = vec4(abs(normal.x), abs(normal.y), abs(normal.z), 1.0);
@@ -537,29 +551,26 @@ void slammingForce(vec3 A, vec3 B, vec3 C, vec3 tNormal, float submergedArea, in
     vec3 tCentroid = triangleCentroid(A, B, C);
     vec3 tVelocity =  triangleVelocity(tCentroid, originPoint);
     float tVelocityMagnitude = length(tVelocity);
-    float tOldVelocityMagnitude = length(boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn].xyz);
-    float tArea = triangleArea(A, B, C);
     float tCosVelocityNormal = (triangleVelocityNormalCos(tVelocity, tNormal));
-    float oldDeltaTimeSeconds = float(oldDeltaTime) / 1000.0;
-    if (submergedArea == 0 || oldDeltaTimeSeconds == 0 || tVelocityMagnitude <= 0.5 || tCosVelocityNormal <= 0) {
-        boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
-        boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn] = submergedArea;
-        return;
+
+    if (submergedArea != 0 && tVelocityMagnitude != 0 && tCosVelocityNormal > 0) {
+        float tOldVelocityMagnitude = length(boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn].xyz);
+        float tArea = triangleArea(A, B, C);
+        vec3 Fstop = -boatMass * tVelocity * 2 * submergedArea / boatTotalArea + forcesArray[0] + forcesArray[1] + forcesArray[2];
+        float tOldSubmergedArea = boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn];
+        vec3 gamma = (submergedArea * tVelocity - tOldSubmergedArea * boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn].xyz) / tArea;
+        float gammaMax = 0.1;
+        float multiplier = length(gamma) / gammaMax;
+        multiplier = multiplier < 0 ? 0 : (multiplier > 1 ? 1 : multiplier);
+        multiplier = pow(multiplier, 2);
+
+        vec3 Fslam = multiplier * tCosVelocityNormal * Fstop;
+
+        forcesArray[0] += Fslam;
+        torquesArray[0] += cross(tCentroid - worldCenterOfMass, Fslam);
+        
+        transformAndEmitVertices(A, B, C, multiplier);
     }
-    vec3 Fstop = -boatMass * tVelocity * 2 * submergedArea / boatTotalArea;
-    float tOldSubmergedArea = boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn];
-    float gamma = (submergedArea * tVelocityMagnitude - tOldSubmergedArea * tOldVelocityMagnitude) / (tArea * oldDeltaTimeSeconds);
-    float gammaMax = tVelocityMagnitude / oldDeltaTimeSeconds;
-    float multiplier = gamma / gammaMax;
-    multiplier = multiplier < 0 ? 0 : (multiplier > 1 ? 1 : multiplier);
-    multiplier = pow(multiplier, 2);
-
-    //transformAndEmitVertices(A, B, C);
-
-    vec3 Fslam = multiplier * tCosVelocityNormal * Fstop;
-
-    forcesArray[0] += Fslam;
-    torquesArray[0] += cross(tCentroid - worldCenterOfMass, Fslam);
 
     boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
     boatOldSubmergedAreas[boatIndex * maxTriangles + gl_PrimitiveIDIn] = submergedArea;
@@ -745,7 +756,7 @@ void main() {
         }
     }
 
-    slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass, originPoint);
+    //slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass, originPoint);
 
     forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);
@@ -754,6 +765,4 @@ void main() {
     torques[gl_PrimitiveIDIn * 3] = vec4(torquesAux[0], 0.0);
     torques[gl_PrimitiveIDIn * 3 + 1] = vec4(torquesAux[1], 0.0);
     torques[gl_PrimitiveIDIn * 3 + 2] = vec4(torquesAux[2], 0.0);
-
-    //transformAndEmitVertices(vertices, workingTriangles);
 }
