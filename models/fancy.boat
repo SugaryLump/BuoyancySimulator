@@ -1,0 +1,6 @@
+modelFile=fancy.obj
+mass=75000
+worldPosition=0,1000,-0
+centerOfMass=0,-300,0
+automateVolume=true
+automateInertia=true

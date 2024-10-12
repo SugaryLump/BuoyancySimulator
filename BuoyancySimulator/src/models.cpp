@@ -69,11 +69,24 @@ Model::Model(string objFilename, float volume, vec3 worldPosition, bool voxelsDe
             vertices.push_back(attrib.vertices[3 * idx.vertex_index]);
             vertices.push_back(attrib.vertices[3 * idx.vertex_index + 1]);
             vertices.push_back(attrib.vertices[3 * idx.vertex_index + 2]);
-            vertices.push_back(attrib.normals[3 * idx.normal_index]);
-            vertices.push_back(attrib.normals[3 * idx.normal_index + 1]);
-            vertices.push_back(attrib.normals[3 * idx.normal_index + 2]);
-            vertices.push_back(attrib.texcoords[2 * idx.texcoord_index]);
-            vertices.push_back(attrib.texcoords[2 * idx.texcoord_index + 1]);
+            if (attrib.normals.size() > 3 * idx.normal_index + 2) {
+                vertices.push_back(attrib.normals[3 * idx.normal_index]);
+                vertices.push_back(attrib.normals[3 * idx.normal_index + 1]);
+                vertices.push_back(attrib.normals[3 * idx.normal_index + 2]);
+            }
+            else {
+                vertices.push_back(0);
+                vertices.push_back(0);
+                vertices.push_back(0);
+            }
+            if (attrib.normals.size() > 2 * idx.texcoord_index + 1) {
+                vertices.push_back(attrib.texcoords[2 * idx.texcoord_index]);
+                vertices.push_back(attrib.texcoords[2 * idx.texcoord_index + 1]);
+            }
+            else {
+                vertices.push_back(0);
+                vertices.push_back(0);
+            }
             current_index++;
         }
     }
