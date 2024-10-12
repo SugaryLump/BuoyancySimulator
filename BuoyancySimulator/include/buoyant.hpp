@@ -17,6 +17,8 @@ class Buoyant {
         float mass;
         vec3 centerOfMass;
         mat3 inertiaModifier;
+        vec3 propulsionPointOfApplication;
+        vec3 propulsionForce;
 
     public:
         Buoyant(string boatFileName = "models/boat.boat", bool debug = false);
@@ -24,4 +26,6 @@ class Buoyant {
         float GetMass();
         mat3 GetInertiaModifier();
         vec3 GetCenterOfMass();
+        vec3 GetPropulsionPointOfApplication();
+        vec3 GetPropulsionForce();
 };

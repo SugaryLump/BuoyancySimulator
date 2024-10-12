@@ -86,6 +86,22 @@ Buoyant::Buoyant(string boatFileName, bool debug) {
         else if (key.compare("automateVolume") == 0) {
             automateVolume = value.compare("true") == 0;
         }
+        else if (key.compare("propulsionPointOfApplication") == 0) {
+            istringstream valueStream(value);
+            for (int i = 0; i < 3; i++) {
+                string number;
+                getline(valueStream, number, ',');
+                this->propulsionPointOfApplication[i] = stof(number);
+            }
+        }
+        else if (key.compare("propulsionForce") == 0) {
+            istringstream valueStream(value);
+            for (int i = 0; i < 3; i++) {
+                string number;
+                getline(valueStream, number, ',');
+                this->propulsionForce[i] = stof(number);
+            }
+        }
     }
     boatFile.close();
     
@@ -135,4 +151,12 @@ mat3 Buoyant::GetInertiaModifier() {
 
 vec3 Buoyant::GetCenterOfMass() {
     return this->centerOfMass;
+}
+
+vec3 Buoyant::GetPropulsionPointOfApplication() {
+    return this->propulsionPointOfApplication;
+}
+
+vec3 Buoyant::GetPropulsionForce() {
+    return this->propulsionForce;
 }

@@ -24,7 +24,7 @@
 using namespace std;
 using namespace glm;
 
-#define WAVE_HEIGHT 3.0f;
+#define WAVE_HEIGHT 0.5f;
 
 shared_ptr<Camera> camera;
 
@@ -52,6 +52,8 @@ shared_ptr<Shader> cameraShader;
 GLuint elapsedTime = 0;
 GLuint frameFrequency = 0;
 GLuint oldFrameFrequency = 0;
+
+bool propulsionOn = false;
 
 void updateEllapsedTime() {
     GLuint newTime = glutGet(GLUT_ELAPSED_TIME);
@@ -132,6 +134,8 @@ void render() {
         GLuint m_vpLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_vp");
         GLuint m_scaleRotationLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_scale_rotation");
         GLuint m_translationLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "m_translation");
+        GLuint boatPropulsionPointOfApplicationLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "propulsionPointOfApplication");
+        GLuint boatPropulsionForceLocation = glGetUniformLocation(buoyantApplicationShader->shaderProgram, "propulsionForce");
         for (int i = 0; i < buoyantModels.size(); i++) {
             // Run hydrodynamic/hydrostatic force calculations
             glDisable(GL_DEPTH_TEST);
@@ -229,6 +233,16 @@ void render() {
 
 
             {
+                vec3 propulsionForce;
+                if (propulsionOn) {
+                    propulsionForce = buoyantModels[i]->GetPropulsionForce();
+                }
+                else {
+                    propulsionForce = vec3(0.0);
+                }
+                glUniform3f(boatPropulsionForceLocation, propulsionForce.x, propulsionForce.y, propulsionForce.z);
+                vec3 propulsionPointOfApplication = buoyantModels[i]->GetPropulsionPointOfApplication();
+                glUniform3f(boatPropulsionPointOfApplicationLocation, propulsionPointOfApplication.x, propulsionPointOfApplication.y, propulsionPointOfApplication.z);
                 glUniform1ui(boatIndexLocation, boatIndex);
                 glUniform1f(boatMassLocation, buoyantModels[i]->GetMass());
                 //glUniform1f(boatInertiaModifierLocation, 0.00004);
@@ -295,6 +309,19 @@ void pressKey(unsigned char key, int x, int y) {
 
 void liftKey(unsigned char key, int x, int y) {
     camera->LiftKey(key);
+}
+
+void pressSpecialKey(int key, int x, int y) {
+    if (key == GLUT_KEY_UP) {
+        propulsionOn = true;
+    }
+    else if (key == GLUT_KEY_DOWN) {
+        propulsionOn = false;
+    }
+}
+
+void liftSpecialKey(int key, int x, int y) {
+
 }
 
 void moveMouse(int x, int y) {
@@ -424,6 +451,8 @@ int main(int argc, char* argv[]) {
     glutReshapeFunc(resizeWindow);
     glutKeyboardFunc(pressKey);
     glutKeyboardUpFunc(liftKey);
+    glutSpecialFunc(pressSpecialKey);
+    glutSpecialUpFunc(liftSpecialKey);
     glutPassiveMotionFunc(moveMouse);
 
     // Init glew

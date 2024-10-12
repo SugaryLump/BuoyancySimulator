@@ -36,6 +36,10 @@ layout (std430, binding = 8) buffer torquesSSBO {
 uniform uint boatIndex;
 uniform float boatMass;
 uniform mat3 boatInertiaModifier;
+uniform vec3 centerOfMass;
+
+uniform vec3 propulsionForce;
+uniform vec3 propulsionPointOfApplication;
 
 uniform uint deltaTime;
 
@@ -105,8 +109,8 @@ mat3 rotateTensor (mat3 tensor, mat3 rotationMatrix) {
     return rotationMatrix * tensor * transpose(rotationMatrix);
 }
 
-vec3 nextVelocity(float deltaTime) {
-    vec3 acceleration = 1.0 / boatMass * forces[0].xyz - vec3(0, 9.81, 0);
+vec3 nextVelocity(vec3 propulsionForce, float deltaTime) {
+    vec3 acceleration = 1.0 / boatMass * (forces[0].xyz + propulsionForce) - vec3(0, 9.81, 0);
     return boatVelocities[boatIndex].xyz + deltaTime  * acceleration;
 }
 
@@ -114,8 +118,8 @@ vec3 nextPosition(vec3 velocity, float deltaTime) {
     return boatPositions[boatIndex].xyz + deltaTime * velocity;
 }
 
-vec3 nextAngularVelocity(float deltaTime, mat3 inverseInertiaTensor) {
-    vec3 acceleration = inverseInertiaTensor * torques[0].xyz;
+vec3 nextAngularVelocity(vec3 propulsionTorque, float deltaTime, mat3 inverseInertiaTensor) {
+    vec3 acceleration = inverseInertiaTensor * (torques[0].xyz + propulsionTorque);
     return boatAngularVelocities[boatIndex].xyz + acceleration * deltaTime;
 }
 
@@ -132,9 +136,13 @@ void main() {
 
     mat3 boatInverseInertiaTensor = inverse(rotateTensor(boatInertiaModifier, boatRotationMatrix));
 
-    vec3 newVelocity = nextVelocity(deltaTimeSeconds);
+    vec3 worldCenterOfMass = applyBoatTransforms(vec4(centerOfMass,1.0));
+    vec3 propulsionForceRotated = boatRotationMatrix * (m_scale_rotation * vec4(propulsionForce, 1.0)).xyz;
+    vec3 propulsionTorqueRotated = cross(propulsionPointOfApplication - worldCenterOfMass, propulsionForceRotated);
+
+    vec3 newVelocity = nextVelocity(propulsionForceRotated, deltaTimeSeconds);
     vec3 newPosition = nextPosition(newVelocity, deltaTimeSeconds);
-    vec3 newAngularVelocity = nextAngularVelocity(deltaTimeSeconds, boatInverseInertiaTensor);
+    vec3 newAngularVelocity = nextAngularVelocity(propulsionTorqueRotated, deltaTimeSeconds, boatInverseInertiaTensor);
     vec4 newAngularPosition = nextAngularPosition(newAngularVelocity, deltaTimeSeconds);
     
     boatVelocities[boatIndex] = vec4(newVelocity, 0.0);

@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(line_strip, max_vertices=18) out;
+layout(line_strip, max_vertices=2) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -344,14 +344,14 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
 
     // This is like this for rudimentar parametrization
     if (tCosTheta > 0) {
-        C_D1 = 1000;
-        C_D2 = 400;
+        C_D1 = 700;
+        C_D2 = 300;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
         orientation = -1;
     }
     else {
-        C_D1 = 1000;
+        C_D1 = 700;
         C_D2 = 150;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
@@ -362,39 +362,13 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
     return orientation * tNormal * (C_D1 * speedTerm + C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P);
 }
 
-void transformAndEmitVertices(vec3 A, vec3 B, vec3 C) {
-    colorIn = vec4(1.0, 0.0, 0.0 , 1.0);
+void transformAndEmitVertices(vec3 A, vec3 B) {
+    colorIn = vec4(1,0,0,1);
     vec4 vertex = m_vp * vec4(A, 1.0);
     gl_Position = vertex;
     EmitVertex();
     vertex = m_vp * vec4(B, 1.0);
     gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(C, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    EndPrimitive();
-}
-
-void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float multiplier) {
-    colorIn = vec4(multiplier > 0.1 ? 1 : 0, 0, 0, 1.0);
-    vec4 vertex = m_vp * vec4(A, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(B, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(C, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    EndPrimitive();
-}
-
-void transformAndEmitVertices(vec3 origin, vec3 force) {
-    colorIn = vec4(vec3(1), 1.0);
-    gl_Position = m_vp * vec4(origin, 1.0);
-    EmitVertex();
-    gl_Position = m_vp * vec4(origin + force, 1.0);
     EmitVertex();
     EndPrimitive();
 }
@@ -460,7 +434,6 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
 
         // Torque
         upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
-        transformAndEmitVertices(upPointOfApplication, vec3(0, 1, 0));
     }
     if (downArea != 0) {
         // Buoyancy Force
@@ -469,16 +442,11 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
         // Viscous Water Resistance
         downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
 
-    // Pressure Drag Force
-    // Pressure Drag Force
-    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
         // Pressure Drag Force
-    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
-        downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
+        upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
 
         // Torque
         downTorque = cross(downPointOfApplication - worldCenterOfMass, downForce);
-        transformAndEmitVertices(downPointOfApplication, vec3(0, 1, 0));
     }
 
     // Final sum
@@ -507,8 +475,6 @@ void slammingForce(vec3 A, vec3 B, vec3 C, vec3 tNormal, float submergedArea, in
 
         forcesArray[0] += Fslam;
         torquesArray[0] += cross(tCentroid - worldCenterOfMass, Fslam);
-        
-        transformAndEmitVertices(A, B, C, multiplier);
     }
 
     boatOldTriangleVelocities[boatIndex * maxTriangles + gl_PrimitiveIDIn] = vec4(tVelocity, 0.0);
@@ -586,6 +552,7 @@ void main() {
                 vertices[6] = JM;
                 vertices[7] = L;
                 vertices[8] = JH;
+                transformAndEmitVertices(vertices[8], vertices[6]);
             }
             else {
                 vertices[0] = M;
@@ -599,6 +566,7 @@ void main() {
                 vertices[6] = L;
                 vertices[7] = JM;
                 vertices[8] = JH;
+                transformAndEmitVertices(vertices[7], vertices[8]);
             }
             submergedArea += triangleArea(vertices[6], vertices[7], vertices[8]);
         }
@@ -640,6 +608,7 @@ void main() {
                 vertices[6] = IH;
                 vertices[7] = M;
                 vertices[8] = IM;
+                transformAndEmitVertices(vertices[1], vertices[2]);
             }
             else {
                 vertices[0] = IH;
@@ -653,6 +622,7 @@ void main() {
                 vertices[6] = M;
                 vertices[7] = IH;
                 vertices[8] = IM;
+                transformAndEmitVertices(vertices[2], vertices[0]);
             }
             submergedArea += triangleArea(vertices[3], vertices[4], vertices[5]);
             submergedArea += triangleArea(vertices[6], vertices[7], vertices[8]);
