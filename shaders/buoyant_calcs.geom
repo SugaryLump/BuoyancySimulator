@@ -1,7 +1,7 @@
 #version 450
 
 layout(triangles) in;
-layout(triangle_strip, max_vertices=15) out;
+layout(line_strip, max_vertices=18) out;
 
 layout(std430, binding = 1) buffer boatPositionsSSBO{
     vec4 boatPositions[];
@@ -77,48 +77,6 @@ vec3 normal(vec3 A, vec3 B, vec3 C) {
     }
     return N;
 }
-
-// Returns a plane defined by 3 points
-//vec4 plane(vec3 A, vec3 B, vec3 C) {
-//    vec3 normal = normal(A, B, C);
-//    float delta = -dot(normal, A);
-//    return vec4(normal, delta);
-//}
-
-//Returns a plane vector that roughly represents an ocean tangent plane
-//for a given vertex's "horizontal" coordinates
-//(x and z, since y representes altitude in this simulation)
-//vec4 oceanPlane(float x, float z) {
-//    float xmin = floor(x);
-//    float xmax = xmin + 1;
-//    float zmin = floor(z);
-//    float zmax = zmin + 1;
-//
-//    vec3 planeA, planeB, planeC;
-//
-//    if (fract(x) > fract(z)) {
-//        planeA = vec3(xmin, waveHeightAtPoint(xmin, zmin), zmin);
-//        planeB = vec3(xmin, waveHeightAtPoint(xmin, zmax), zmax);
-//        planeC = vec3(xmax, waveHeightAtPoint(xmax, zmin), zmin);
-//    }
-//    else {
-//        planeA = vec3(xmax, waveHeightAtPoint(xmax, zmax), zmax);
-//        planeB = vec3(xmax, waveHeightAtPoint(xmax, zmin), zmin);
-//        planeC = vec3(xmax, waveHeightAtPoint(xmax, zmax), zmax);
-//    }
-//
-//    return plane(planeA, planeB, planeC);
-//}
-
-// Calculate a point's signed distance to the ocean surface (negative = below surface)
-// !!!Really, I have no idea why this original commented method is half as complex as it is.
-// Newer version seems to work just fine and is infinitely simpler.!!!
-//float surfaceDistance(vec3 vertex) {
-//    vec4 pl = oceanPlane(vertex.x, vertex.z);
-//
-//    float oceanAltitude = -((vertex.x * pl.x) + (vertex.z * pl.z) + pl.w) / pl.y;
-//    return vertex.y - oceanAltitude;
-//}
 
 // Calculate a point's signed distance to the ocean surface (negative = below surface)
 float surfaceDistance(vec3 vertex) {
@@ -268,6 +226,9 @@ vec3 upwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
     float h = A.y - C.y;
     float z0 = -surfaceDistance(A);
     float tc;
+    if (z0 < 0) {
+        z0 = 0;
+    }
     if (h == 0) {
         tc = 0.5;
     }
@@ -288,6 +249,9 @@ vec3 downwardTrianglePointOfApplication(vec3 A, vec3 B, vec3 C) {
     float h = C.y - A.y;
     float z0 = -surfaceDistance(B);
     float tc;
+    if (z0 < 0) {
+        z0 = 0;
+    }
     if (h == 0) {
         tc = 0.5;
     }
@@ -329,8 +293,8 @@ float resistanceCoefficient() {
 
     float resistanceCoefficient = 0.075 / divisor;
 
-    // Clamping because this function tends to infinity with speed :)
-    return resistanceCoefficient;
+    // Clamping because this function tends to infinity with low speed :)
+    return resistanceCoefficient > 0.2 ? 0.2 : resistanceCoefficient;
 }
 
 // Calculates a point's velocity
@@ -380,14 +344,14 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
 
     // This is like this for rudimentar parametrization
     if (tCosTheta > 0) {
-        C_D1 = 2000;
+        C_D1 = 1000;
         C_D2 = 400;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
         orientation = -1;
     }
     else {
-        C_D1 = 2000;
+        C_D1 = 1000;
         C_D2 = 150;
         f_P = 0.5;
         speedTerm = tVelMagnitude / 1;
@@ -397,18 +361,6 @@ vec3 pressureDragForce(vec3 tNormal, float tArea, float tVelMagnitude, float tCo
     // return orientation * (C_D1 * speedTerm +  C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P) * tNormal;
     return orientation * tNormal * (C_D1 * speedTerm + C_D2 * pow(speedTerm, 2)) * tArea * pow(tCosTheta, f_P);
 }
-
-// Calculates the slamming force on this triangle
-// The original function for this
-/*vec3 slammingForce(float tArea, float tCosTheta) {
-    float boatArea = boatTotalArea;
-
-    if (boatArea == 0) {
-        return vec3(0.0);
-    }
-
-    return ((2 * boatMass * (tCosTheta < 0 ? 0 : tArea * tCosTheta)) / boatArea) * boatVelocities[boatIndex].xyz;
-}*/
 
 void transformAndEmitVertices(vec3 A, vec3 B, vec3 C) {
     colorIn = vec4(1.0, 0.0, 0.0 , 1.0);
@@ -438,34 +390,6 @@ void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float multiplier) {
     EndPrimitive();
 }
 
-/*void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, float torqueMagnitude) {
-    colorIn = vec4(torqueMagnitude/10, torqueMagnitude/100, torqueMagnitude/1000, 1.0);
-    vec4 vertex = m_vp * vec4(A, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(B, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(C, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    EndPrimitive();
-}*/
-
-/*void transformAndEmitVertices(vec3 A, vec3 B, vec3 C, vec3 normal) {
-    colorIn = vec4(abs(normal.x), abs(normal.y), abs(normal.z), 1.0);
-    vec4 vertex = m_vp * vec4(A+ normal * 0.1, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(B+ normal * 0.1, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    vertex = m_vp * vec4(C+ normal * 0.1, 1.0);
-    gl_Position = vertex;
-    EmitVertex();
-    EndPrimitive();
-}*/
-
 void transformAndEmitVertices(vec3 origin, vec3 force) {
     colorIn = vec4(vec3(1), 1.0);
     gl_Position = m_vp * vec4(origin, 1.0);
@@ -492,14 +416,10 @@ void setTriangleForceAndTorqueOLD(inout vec3[3] forcesArray, inout vec3[3] torqu
     force += viscousWaterResistance(tNormal, tArea, tVelocity, tVelocityMagnitude, resC);
 
     // Pressure Drag Force
-    //force -= length(force) * tNormal * tCosVelocityNormal * tArea *0.05;
-    vec3 pdrag = pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosVelocityNormal);
-    force += pdrag;
+    force += pressureDragForce(tNormal, tArea, tVelocityMagnitude, tCosVelocityNormal);
 
     // Torque
     vec3 torque = cross(tCentroid - worldCenterOfMass, force);
-
-    transformAndEmitVertices(tCentroid, tVelocity/2);
 
     // Final sum
     forcesArray[index] = force;
@@ -509,6 +429,8 @@ void setTriangleForceAndTorqueOLD(inout vec3[3] forcesArray, inout vec3[3] torqu
 void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesArray, vec3[9] vertices, vec3 tNormal, int index, float resC, vec3 worldCenterOfMass, vec3 originPoint) {
     vec3 upForce = vec3(0.0);
     vec3 downForce = vec3(0.0);
+    vec3 upTorque = vec3(0.0);
+    vec3 downTorque = vec3(0.0);
 
     // Triangle splitting
     vec3[2][3] horBaseTriangles;
@@ -526,21 +448,38 @@ void setTriangleForceAndTorque(inout vec3[3] forcesArray, inout vec3[3] torquesA
     float upCosVelocityNormal = triangleVelocityNormalCos(upVelocity, tNormal);
     float downCosVelocityNormal = triangleVelocityNormalCos(downVelocity, tNormal);
 
-    // Buoyancy Force
-    upForce += buoyancyForce(upPointOfApplication, tNormal, upArea);
-    downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
+    if (upArea != 0) {
+        // Buoyancy Force
+        upForce += buoyancyForce(upPointOfApplication, tNormal, upArea);
 
-    // Viscous Water Resistance
-    upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
-    downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
+        // Viscous Water Resistance
+        upForce += viscousWaterResistance(tNormal, upArea, upVelocity, upVelocityMagnitude, resC);
+
+        // Pressure Drag Force
+        upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
+
+        // Torque
+        upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
+        transformAndEmitVertices(upPointOfApplication, vec3(0, 1, 0));
+    }
+    if (downArea != 0) {
+        // Buoyancy Force
+        downForce += buoyancyForce(downPointOfApplication, tNormal, downArea);
+
+        // Viscous Water Resistance
+        downForce += viscousWaterResistance(tNormal, downArea, downVelocity, downVelocityMagnitude, resC);
 
     // Pressure Drag Force
+    // Pressure Drag Force
     upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
-    downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
+        // Pressure Drag Force
+    upForce += pressureDragForce(tNormal, upArea, upVelocityMagnitude, upCosVelocityNormal);
+        downForce += pressureDragForce(tNormal, downArea, downVelocityMagnitude, downCosVelocityNormal);
 
-    // Torque
-    vec3 upTorque = cross(upPointOfApplication - worldCenterOfMass, upForce);
-    vec3 downTorque = cross(downPointOfApplication - worldCenterOfMass, downForce);
+        // Torque
+        downTorque = cross(downPointOfApplication - worldCenterOfMass, downForce);
+        transformAndEmitVertices(downPointOfApplication, vec3(0, 1, 0));
+    }
 
     // Final sum
     forcesArray[index] = upForce + downForce;
@@ -756,7 +695,7 @@ void main() {
         }
     }
 
-    //slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass, originPoint);
+    // slammingForce(A, B, C, tNormal, submergedArea, forcesAux, torquesAux, worldCenterOfMass, originPoint);
 
     forces[gl_PrimitiveIDIn * 3 + 0] = vec4(forcesAux[0], 0.0);
     forces[gl_PrimitiveIDIn * 3 + 1] = vec4(forcesAux[1], 0.0);

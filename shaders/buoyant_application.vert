@@ -110,11 +110,6 @@ vec3 nextVelocity(float deltaTime) {
     return boatVelocities[boatIndex].xyz + deltaTime  * acceleration;
 }
 
-// !!!Original source for this function is slowing the speed down by 50% and
-// also adding the new velocity to the old velocity (even though the new
-// velocity is already calculated by summing acceleration to the old
-// velocity...)
-// I don't know!!!
 vec3 nextPosition(vec3 velocity, float deltaTime) {
     return boatPositions[boatIndex].xyz + deltaTime * velocity;
 }

@@ -17,7 +17,6 @@ contrib/freeglut-3.4.0/lib
 /bin
 /build
 /lib
-contrib/glew-2.2.0/build/cmake/cmake_uninstall.cmake
 
 # Prerequisites
 *.d

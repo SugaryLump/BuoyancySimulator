@@ -79,7 +79,7 @@ Model::Model(string objFilename, float volume, vec3 worldPosition, bool voxelsDe
                 vertices.push_back(0);
                 vertices.push_back(0);
             }
-            if (attrib.normals.size() > 2 * idx.texcoord_index + 1) {
+            if (attrib.texcoords.size() > 2 * idx.texcoord_index + 1) {
                 vertices.push_back(attrib.texcoords[2 * idx.texcoord_index]);
                 vertices.push_back(attrib.texcoords[2 * idx.texcoord_index + 1]);
             }

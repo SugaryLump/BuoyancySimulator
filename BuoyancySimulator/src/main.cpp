@@ -24,7 +24,7 @@
 using namespace std;
 using namespace glm;
 
-#define WAVE_HEIGHT 0.3f;
+#define WAVE_HEIGHT 3.0f;
 
 shared_ptr<Camera> camera;
 
