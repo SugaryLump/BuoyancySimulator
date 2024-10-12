@@ -383,12 +383,12 @@ void initSSBOs() {
 
     glGenBuffers(1, &boatOldTriangleVelocitiesSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatOldTriangleVelocitiesSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * maxTriangleCount * sizeof(vec4), nBoatsZeroVec4s, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * maxTriangleCount * sizeof(vec4), maxTrianglesZeroVec4sPerBoat, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, boatOldTriangleVelocitiesSSBO);
 
     glGenBuffers(1, &boatOldSubmergedAreasSSBO);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, boatOldSubmergedAreasSSBO);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * maxTriangleCount * sizeof(float), maxTrianglesZeroFloats, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, buoyantModels.size() * maxTriangleCount * sizeof(float), maxTrianglesZeroFloatsPerBoat, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, boatOldSubmergedAreasSSBO);
 
     glGenBuffers(1, &boatAngularPositionsSSBO);

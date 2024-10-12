@@ -105,8 +105,8 @@ mat3 rotateTensor (mat3 tensor, mat3 rotationMatrix) {
     return rotationMatrix * tensor * transpose(rotationMatrix);
 }
 
-vec3 nextVelocity(vec3 F, float deltaTime) {
-    vec3 acceleration = 1.0 / boatMass * F;
+vec3 nextVelocity(float deltaTime) {
+    vec3 acceleration = 1.0 / boatMass * forces[0].xyz - vec3(0, 9.81, 0);
     return boatVelocities[boatIndex].xyz + deltaTime  * acceleration;
 }
 
@@ -131,17 +131,13 @@ vec4 nextAngularPosition(vec3 angularVelocity, float deltaTime) {
 }
 
 void main() {
-    vec3 gravity = boatMass * vec3(0.0, -9.8, 0.0);
-
-    vec3 F = forces[0].xyz + gravity;
-
     float deltaTimeSeconds = float(deltaTime) / 1000.0;
 
     mat3 boatRotationMatrix = quaternionToRotationMatrix(boatAngularPositions[boatIndex]);
 
     mat3 boatInverseInertiaTensor = inverse(rotateTensor(boatInertiaModifier, boatRotationMatrix));
 
-    vec3 newVelocity = nextVelocity(F, deltaTimeSeconds);
+    vec3 newVelocity = nextVelocity(deltaTimeSeconds);
     vec3 newPosition = nextPosition(newVelocity, deltaTimeSeconds);
     vec3 newAngularVelocity = nextAngularVelocity(deltaTimeSeconds, boatInverseInertiaTensor);
     vec4 newAngularPosition = nextAngularPosition(newAngularVelocity, deltaTimeSeconds);
